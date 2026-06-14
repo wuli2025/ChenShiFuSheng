@@ -1,0 +1,320 @@
+<script setup lang="ts">
+import {
+  computed,
+  ref,
+  watch,
+  onMounted,
+  onBeforeUnmount,
+  defineAsyncComponent,
+} from "vue";
+// ── 常驻 / 首屏关键：静态导入 ──
+import Sidebar from "./components/Sidebar.vue";
+import ViewLoader from "./components/ViewLoader.vue";
+import ChatPanel from "./components/ChatPanel.vue";
+import SplashScreen from "./components/SplashScreen.vue";
+import EnvDoctor from "./components/EnvDoctor.vue"; // 既是视图也是启动 env 网关
+import ToastHost from "./components/ToastHost.vue";
+import VoiceOverlay from "./components/VoiceOverlay.vue";
+import CommandPalette from "./components/CommandPalette.vue";
+import { useHotkeys } from "./composables/useHotkeys";
+import { installMarkdownDelegation } from "./lib/markdown";
+import { openUrl, onWsStatus, isTauri } from "./tauri";
+// ── 非首屏视图：懒加载 ──
+const KnowledgeGraph = defineAsyncComponent(() => import("./components/KnowledgeGraph.vue"));
+const WikiBrowse = defineAsyncComponent(() => import("./components/WikiBrowse.vue"));
+const ClaudeMdPanel = defineAsyncComponent(() => import("./components/ClaudeMdPanel.vue"));
+const Settings = defineAsyncComponent(() => import("./components/Settings.vue"));
+const VoiceSettings = defineAsyncComponent(() => import("./components/VoiceSettings.vue"));
+const AddProviderModal = defineAsyncComponent(() => import("./components/AddProviderModal.vue"));
+import { useAppStore, type ViewKey } from "./stores/app";
+import { useProvidersStore } from "./stores/providers";
+import { useChatStore } from "./stores/chat";
+
+const app = useAppStore();
+const providers = useProvidersStore();
+const chatStore = useChatStore();
+
+// ─────────── 重视图(图谱)切换的"点击即缓冲"加载条 ───────────
+const HEAVY: ViewKey[] = ["graph"];
+const warmed = ref<Set<ViewKey>>(new Set());
+const mountedView = ref<ViewKey>(app.view);
+const switchLoader = ref<ViewKey | null>(null);
+let loaderSafety: number | undefined;
+
+watch(
+  () => app.view,
+  (next) => {
+    if (HEAVY.includes(next) && !warmed.value.has(next)) {
+      switchLoader.value = next;
+      clearTimeout(loaderSafety);
+      loaderSafety = window.setTimeout(() => {
+        if (switchLoader.value === next) switchLoader.value = null;
+      }, 4500);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (app.view !== next) return;
+          mountedView.value = next;
+          warmed.value.add(next);
+        })
+      );
+    } else {
+      mountedView.value = next;
+      switchLoader.value = null;
+    }
+  }
+);
+
+function onViewReady(v: ViewKey) {
+  if (switchLoader.value === v) switchLoader.value = null;
+}
+
+// 多开核心：app 级注册一次流式监听，任意对话的事件都按 conversationId 路由进各自缓冲。
+let unMdDelegate: (() => void) | null = null;
+let unWsStatus: (() => void) | null = null;
+onMounted(() => {
+  chatStore.init();
+  unMdDelegate = installMarkdownDelegation(document, (url) => {
+    openUrl(url).catch(() => {});
+  });
+  if (!isTauri) unWsStatus = onWsStatus((ok) => (wsDown.value = !ok));
+});
+onBeforeUnmount(() => {
+  unMdDelegate?.();
+  unWsStatus?.();
+  clearTimeout(loaderSafety);
+  window.removeEventListener("mousemove", onAuroraPointer);
+  if (edgeRaf) cancelAnimationFrame(edgeRaf);
+});
+
+// ─────────── 极光主题：彩虹边框高光跟随鼠标方位游走 ───────────
+let mainEl: HTMLElement | null = null;
+let edgeRaf = 0;
+let edgePx = 0;
+let edgePy = 0;
+function flushEdge() {
+  edgeRaf = 0;
+  mainEl ||= document.querySelector(".main");
+  if (!mainEl) return;
+  const r = mainEl.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  const deg = (Math.atan2(edgePy - cy, edgePx - cx) * 180) / Math.PI + 90;
+  mainEl.style.setProperty("--edge-angle", `${deg.toFixed(1)}deg`);
+}
+function onAuroraPointer(e: MouseEvent) {
+  edgePx = e.clientX;
+  edgePy = e.clientY;
+  if (!edgeRaf) edgeRaf = requestAnimationFrame(flushEdge);
+}
+const isAurora = computed(
+  () => app.theme === "aurora-light" || app.theme === "aurora-dark"
+);
+watch(
+  isAurora,
+  (on) => {
+    if (on) {
+      window.addEventListener("mousemove", onAuroraPointer, { passive: true });
+    } else {
+      window.removeEventListener("mousemove", onAuroraPointer);
+      if (edgeRaf) {
+        cancelAnimationFrame(edgeRaf);
+        edgeRaf = 0;
+      }
+    }
+  },
+  { immediate: true }
+);
+
+// 全局快捷键:Ctrl+N 新对话 / Ctrl+K 命令面板 / Ctrl+B 收侧栏
+useHotkeys();
+
+const wsDown = ref(false);
+
+// 启动流程：splash(每次) → env(环境检测,健康则无感放行) → ready
+const phase = ref<"splash" | "env" | "ready">("splash");
+
+function onSplashDone() {
+  phase.value = "env";
+}
+function onEnvDone() {
+  phase.value = "ready";
+}
+
+// 两列布局：侧栏 + 主区（演示框已移除）
+const layoutCols = computed(() => `${app.sidebarWidth}px 1fr`);
+
+// ── 侧栏宽度拖拽(分隔条) ──
+const sbDragging = ref(false);
+function startSbDrag(e: MouseEvent) {
+  if (app.sidebarCollapsed) return;
+  sbDragging.value = true;
+  const startX = e.clientX;
+  const startW = app.sidebarWidth;
+  let pending = startW;
+  let rafId = 0;
+  const flush = () => {
+    rafId = 0;
+    app.setSidebarWidth(pending, false);
+  };
+  const move = (ev: MouseEvent) => {
+    pending = startW + ev.clientX - startX;
+    if (!rafId) rafId = requestAnimationFrame(flush);
+  };
+  const up = () => {
+    sbDragging.value = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    app.setSidebarWidth(pending, true);
+    window.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", up);
+  };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+}
+</script>
+
+<template>
+  <div class="shell" :class="{ 'sb-drag': sbDragging }" :style="{ gridTemplateColumns: layoutCols }">
+    <!-- 极光琉璃画框主题 -->
+    <template v-if="app.theme === 'aurora-light' || app.theme === 'aurora-dark'">
+      <div class="aurora" aria-hidden="true">
+        <span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="a4"></span><span class="a5"></span>
+      </div>
+      <div class="grain" aria-hidden="true"></div>
+    </template>
+    <Sidebar />
+    <main class="main">
+      <!-- 侧栏宽度拖拽分隔条 -->
+      <div
+        v-if="!app.sidebarCollapsed"
+        class="sb-resizer"
+        title="拖拽调节侧栏宽度"
+        @mousedown.prevent="startSbDrag"
+      ></div>
+      <KeepAlive :include="['KnowledgeGraph']">
+        <ChatPanel v-if="mountedView === 'chat'" />
+        <WikiBrowse v-else-if="mountedView === 'wiki'" />
+        <KnowledgeGraph
+          v-else-if="mountedView === 'graph'"
+          @ready="onViewReady('graph')"
+        />
+        <ClaudeMdPanel v-else-if="mountedView === 'claude_md'" />
+        <EnvDoctor v-else-if="mountedView === 'env_doctor'" />
+        <Settings v-else-if="mountedView === 'settings'" />
+        <VoiceSettings v-else-if="mountedView === 'voice_input'" />
+      </KeepAlive>
+
+      <!-- 点击重视图即刻浮现的快速加载条 -->
+      <Transition name="vl">
+        <ViewLoader
+          v-if="switchLoader"
+          :dark="switchLoader === 'graph'"
+          :label="'星河生成中'"
+        />
+      </Transition>
+    </main>
+
+    <!-- 全局 toast + Ctrl+K 命令面板 + 语音浮层 -->
+    <ToastHost />
+    <VoiceOverlay />
+    <CommandPalette />
+
+    <!-- Docker/Web 模式断线提示条 -->
+    <div v-if="wsDown" class="ws-down">连接已断开,正在自动重连…</div>
+
+    <AddProviderModal v-if="providers.showAddModal" />
+
+    <!-- 启动流程覆盖层：splash → env -->
+    <Transition name="splash-fade">
+      <SplashScreen v-if="phase === 'splash'" @done="onSplashDone" />
+    </Transition>
+    <Transition name="onboard-fade">
+      <EnvDoctor v-if="phase === 'env'" gate @done="onEnvDone" />
+    </Transition>
+  </div>
+</template>
+
+<style scoped>
+.shell {
+  height: 100vh;
+  display: grid;
+  background: var(--bg-side);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: grid-template-columns 180ms ease;
+}
+.shell.sb-drag {
+  transition: none;
+  user-select: none;
+  cursor: col-resize;
+}
+.sb-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 30;
+  cursor: col-resize;
+}
+.sb-resizer:hover {
+  background: var(--primary-soft);
+}
+html[data-theme="dark"] .shell {
+  background: var(--bg-side);
+}
+.main {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-chat);
+  display: flex;
+  flex-direction: column;
+  margin: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+.ws-down {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9998;
+  padding: 4px 16px;
+  border-radius: 0 0 9px 9px;
+  background: var(--vermilion);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  box-shadow: var(--shadow-lg);
+}
+</style>
+
+<!-- 非 scoped：Transition 类名需作用在子组件根元素上 -->
+<style>
+.splash-fade-leave-active {
+  transition: opacity 0.8s ease;
+}
+.splash-fade-leave-to {
+  opacity: 0;
+}
+.onboard-fade-enter-active {
+  transition: opacity 0.4s ease;
+}
+.onboard-fade-leave-active {
+  transition: opacity 0.45s ease;
+}
+.onboard-fade-enter-from,
+.onboard-fade-leave-to {
+  opacity: 0;
+}
+</style>

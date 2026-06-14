@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无耻浮生 · 卡尔的选择</title>
+<style>
+  :root{
+    --bg:#13171c; --bg2:#0e1216; --panel:#1a2026; --panel2:#222a31;
+    --line:#2c353d; --line2:#3a454e;
+    --ink:#8fb0cf; --ink-soft:#5b7fa6;
+    --text:#ccd3da; --text-dim:#9aa3ac; --muted:#6b7480;
+    --street:#7f9bc0; --disc:#6f9e7d; --consc:#c9a86a; --heat:#bf5340; --bond:#b985b0;
+    --cinnabar:#a8443a; --amber:#c9803a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(91,127,166,.10), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(191,83,64,.07), transparent 55%),
+      var(--bg);
+    color:var(--text); line-height:1.85;
+    min-height:100%; display:flex; align-items:center; justify-content:center; padding:28px 16px;
+  }
+  .frame{
+    width:100%; max-width:780px; background:var(--bg2);
+    border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55); overflow:hidden; position:relative;
+  }
+  .frame::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+    opacity:.6;
+  }
+
+  /* —— 顶部状态条 —— */
+  .hud{display:flex; gap:11px; padding:12px 20px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#191f25,#141a1f); position:relative; z-index:2}
+  .stat{flex:1; min-width:0}
+  .stat .lab{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px}
+  .stat .zh{font-size:12px; color:var(--text-dim); letter-spacing:1px}
+  .stat .en{font-size:8px; color:var(--muted); letter-spacing:1px}
+  .stat .num{font-size:11px; color:var(--text-dim); font-variant-numeric:tabular-nums}
+  .bar{height:5px; background:#0c1014; border-radius:4px; overflow:hidden; position:relative}
+  .bar > i{display:block; height:100%; width:30%; border-radius:4px; transition:width .55s cubic-bezier(.4,0,.2,1)}
+  .delta{position:absolute; right:0; top:-15px; font-size:11px; font-weight:700; opacity:0; transition:all .5s}
+  .delta.show{opacity:1; transform:translateY(-4px)}
+
+  /* —— 进度 —— */
+  .progress{height:2px; background:#0c1014; position:relative; z-index:2}
+  .progress > i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--ink-soft),var(--ink)); transition:width .6s}
+
+  /* —— 舞台 —— */
+  .stage{padding:28px 34px 34px; position:relative; z-index:2; min-height:440px; display:flex; flex-direction:column}
+  .chapter{display:flex; align-items:flex-end; gap:16px; margin-bottom:4px}
+  .age{font-family:Georgia,"Songti SC","SimSun",serif; font-size:56px; line-height:.9;
+    color:var(--ink); letter-spacing:2px; text-shadow:0 2px 18px rgba(143,176,207,.25)}
+  .age small{display:block; font-size:12px; color:var(--muted); letter-spacing:3px; margin-top:8px; font-family:inherit}
+  .act-tag{font-size:11px; color:var(--cinnabar); letter-spacing:3px; margin-bottom:4px}
+  .era{font-size:12px; color:var(--ink-soft); letter-spacing:3px}
+  .scene-title{font-size:14px; color:var(--text-dim); letter-spacing:6px; margin:14px 0 18px;
+    font-family:Georgia,"Songti SC",serif}
+
+  /* —— 场景配图 —— */
+  .art{position:relative; height:172px; margin:2px 0 16px; border-radius:11px; overflow:hidden;
+    border:1px solid var(--line); background:#0a0d10; opacity:0; transition:opacity .55s}
+  .art svg{display:block; width:100%; height:100%}
+  .art::after{content:""; position:absolute; inset:0; pointer-events:none;
+    box-shadow:inset 0 0 46px 10px rgba(8,11,14,.82)}
+  .art .cap{position:absolute; left:13px; bottom:9px; z-index:2; font-size:11px; letter-spacing:3px;
+    color:rgba(204,211,218,.82); font-family:Georgia,"Songti SC",serif; text-shadow:0 1px 6px rgba(0,0,0,.9)}
+  .ending .art{height:150px; max-width:560px; margin:0 auto 24px; opacity:1}
+
+  .lines{flex:1}
+  .ln{font-size:15.5px; color:var(--text); margin:0 0 16px; opacity:0; transform:translateY(8px);
+    transition:opacity .7s, transform .7s; text-align:justify}
+  .ln.show{opacity:1; transform:none}
+  .ln.dim{color:var(--text-dim)}
+  .tap{text-align:center; color:var(--muted); font-size:12px; letter-spacing:4px; margin-top:6px;
+    animation:blink 1.8s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:.7}}
+
+  /* —— 选项 —— */
+  .choices{display:flex; flex-direction:column; gap:11px; margin-top:18px; opacity:0; transition:opacity .6s}
+  .choices.show{opacity:1}
+  .opt{text-align:left; background:linear-gradient(180deg,#1d242b,#171d23);
+    border:1px solid var(--line2); border-radius:10px; padding:13px 17px; cursor:pointer;
+    color:var(--text); font-size:14.5px; transition:all .2s; font-family:inherit; line-height:1.6}
+  .opt:hover{border-color:var(--ink-soft); background:linear-gradient(180deg,#222b33,#1b232a); transform:translateX(3px)}
+  .opt .hint{display:block; margin-top:5px; font-size:11.5px; color:var(--muted); letter-spacing:.5px}
+
+  /* —— 自由输入 —— */
+  .freebox{margin-top:14px; opacity:0; transition:opacity .6s}
+  .freebox.show{opacity:1}
+  .freebox .q{font-size:13px; color:var(--ink-soft); margin-bottom:8px; letter-spacing:.5px}
+  .freebox textarea{width:100%; min-height:62px; resize:vertical; background:#0e1318;
+    border:1px solid var(--line2); border-radius:9px; color:var(--text); padding:11px 13px;
+    font-family:inherit; font-size:14px; line-height:1.6}
+  .freebox textarea:focus{outline:none; border-color:var(--ink-soft)}
+  .freebox .row{display:flex; justify-content:space-between; align-items:center; margin-top:9px}
+  .freebox .echo{font-size:12.5px; color:var(--consc); font-style:italic; flex:1; margin-right:12px}
+  .mini{background:var(--ink-soft); color:#0c1014; border:none; border-radius:8px; padding:8px 18px;
+    font-size:13px; cursor:pointer; letter-spacing:1px; font-weight:600; font-family:inherit}
+
+  /* —— 章节横幅 —— */
+  .act-banner{position:absolute; inset:0; z-index:5; background:rgba(10,13,16,.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    opacity:0; transition:opacity .7s; pointer-events:none; padding:0 30px}
+  .act-banner.show{opacity:1}
+  .act-banner .l{width:46px; height:1px; background:var(--ink-soft); margin:14px 0}
+  .act-banner .no{font-size:13px; letter-spacing:8px; color:var(--cinnabar)}
+  .act-banner .nm{font-family:Georgia,"Songti SC","SimSun",serif; font-size:30px; letter-spacing:6px; color:var(--ink)}
+
+  /* —— 开场 / 结局 —— */
+  .cover{padding:44px 38px 38px; text-align:center; position:relative; z-index:2}
+  .cover .kicker{font-size:11px; letter-spacing:5px; color:var(--cinnabar); margin-bottom:18px}
+  .cover h1{font-family:Georgia,"Songti SC","SimSun",serif; font-size:42px; color:var(--ink);
+    letter-spacing:8px; margin-bottom:10px; text-shadow:0 3px 24px rgba(143,176,207,.3)}
+  .cover .sub{font-size:13px; color:var(--text-dim); letter-spacing:2px; margin-bottom:24px}
+  .cover .desc{font-size:14px; color:var(--text-dim); text-align:left; max-width:580px; margin:0 auto 14px; line-height:1.95}
+  .cover .desc b{color:var(--text); font-weight:600}
+  .statline{display:flex; justify-content:center; gap:14px; flex-wrap:wrap; margin:22px 0 26px}
+  .statline span{font-size:11.5px; color:var(--muted); letter-spacing:.5px}
+  .statline span i{font-style:normal; font-weight:700}
+  .note{font-size:11.5px; color:var(--muted); margin-top:22px; letter-spacing:.5px; line-height:1.7}
+  .btn{background:linear-gradient(180deg,#6f93bb,#5b7fa6); color:#0b0f13; border:none; border-radius:30px;
+    padding:14px 46px; font-size:15px; letter-spacing:3px; cursor:pointer; font-family:inherit; font-weight:700;
+    box-shadow:0 8px 24px rgba(91,127,166,.3); transition:transform .15s}
+  .btn:hover{transform:translateY(-2px)}
+
+  .ending{padding:44px 40px; position:relative; z-index:2; text-align:center}
+  .ending .rarity{font-size:11px; letter-spacing:5px; margin-bottom:14px}
+  .ending h2{font-family:Georgia,"Songti SC","SimSun",serif; font-size:38px; letter-spacing:6px; margin-bottom:8px; color:var(--ink)}
+  .ending .en{font-size:11px; letter-spacing:4px; color:var(--muted); margin-bottom:24px}
+  .ending .verse{font-size:15px; color:var(--text); line-height:2.05; max-width:580px; margin:0 auto 28px; text-align:justify}
+  .ending .verse::before{content:"「"; color:var(--ink-soft)} .ending .verse::after{content:"」"; color:var(--ink-soft)}
+  .scoreboard{display:flex; justify-content:center; gap:18px; flex-wrap:wrap; margin:6px 0 24px}
+  .scoreboard .it{font-size:12px; color:var(--text-dim)}
+  .scoreboard .it b{display:block; font-size:19px; font-family:Georgia,serif; margin-top:2px}
+  .epilogue{border:1px solid var(--line); border-left:3px solid var(--cinnabar); background:#161b20;
+    border-radius:10px; padding:20px 22px; text-align:left; font-size:13.5px; color:var(--text-dim);
+    line-height:1.95; max-width:620px; margin:0 auto 22px}
+  .epilogue .t{color:var(--cinnabar); font-size:12px; letter-spacing:3px; margin-bottom:10px}
+  .epilogue b{color:var(--text)}
+  .gallery{font-size:11.5px; color:var(--muted); max-width:620px; margin:0 auto 26px; line-height:1.9; text-align:left}
+  .gallery b{color:var(--text-dim)}
+
+  .credits{font-size:11px; color:var(--muted); margin-top:18px; letter-spacing:.5px; z-index:2; position:relative;
+    padding:0 40px 28px; text-align:center}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="hud hidden" id="hud"></div>
+  <div class="progress hidden" id="progress"><i id="progressBar"></i></div>
+
+  <!-- 开场 -->
+  <div class="cover" id="cover">
+    <div class="kicker">A SHAMELESS STORY · 改编自《无耻之徒》· 五幕 · 十一种结局</div>
+    <h1>无耻浮生</h1>
+    <div class="sub">卡尔·加拉格 的 选 择</div>
+    <p class="desc">
+      芝加哥南城,一栋随时会塌的房子里,住着加拉格一家。父亲<b>弗兰克</b>常年泡在酒里,大姐<b>菲奥娜</b>打两份工,
+      把六张要吃饭的嘴拴在一起。你是老五——<b>卡尔·加拉格</b>。大人提起你,总要顿一下,才挑出个词:「皮。」<br><br>
+      从十一岁到二十一岁,这条街会给你递上同一份判决书:毒品、枪、监狱、停尸房。
+      但每一个岔路口,都由你来选。它们累积成你的五种底色,最终决定卡尔成为<b>什么样的人</b>——
+      是高架桥下的一个名字,是铁窗里的一个编号,还是这条街上,第一个穿警服走回来的孩子。<br><br>
+      <b>五幕长篇 · 三条主线分支 · 十一种结局。</b>一周目约需十五到二十分钟;换几个岔路口,就是另一副人生。
+    </p>
+    <div class="statline">
+      <span style="color:var(--street)"><i>街面</i> 你在街上的分量</span>
+      <span style="color:var(--disc)"><i>自律</i> 管住自己的能力</span>
+      <span style="color:var(--consc)"><i>良知</i> 心里没灭的那点光</span>
+      <span style="color:var(--heat)"><i>风险</i> 离死亡和铁窗多近</span>
+      <span style="color:var(--bond)"><i>牵挂</i> 还放不下的人</span>
+    </div>
+    <button class="btn" onclick="start()">开始第一个七年</button>
+    <p class="note">本作含毒品、暴力、犯罪等成熟主题,意在呈现而非美化。<br>
+      十一种结局,其一极难抵达——那是卡尔·加拉格真实人生的终点。</p>
+  </div>
+
+  <!-- 舞台 -->
+  <div class="stage hidden" id="stage">
+    <div class="act-banner" id="actBanner">
+      <div class="no" id="bannerNo"></div><div class="l"></div><div class="nm" id="bannerNm"></div>
+    </div>
+    <div class="art" id="art"></div>
+    <div class="chapter">
+      <div class="age" id="age">十一<small id="ageNote">岁</small></div>
+      <div>
+        <div class="act-tag" id="actTag"></div>
+        <div class="era" id="era"></div>
+      </div>
+    </div>
+    <div class="scene-title" id="sceneTitle"></div>
+    <div class="lines" id="lines"></div>
+    <div class="tap" id="tap">点 击 继 续</div>
+    <div class="freebox hidden" id="freebox"></div>
+    <div class="choices" id="choices"></div>
+  </div>
+
+  <!-- 结局 -->
+  <div class="ending hidden" id="ending"></div>
+
+  <div class="credits">改编自 Showtime 剧集《Shameless / 无耻之徒》中卡尔·加拉格的人物线 · 教育向叙事改编 · 非官方同人作品</div>
+</div>
+
+<script>
+/* ======================================================================
+   数据结构(对齐平台 story.ts):场景图 + 选项 stat增减/flag + 加权结局裁定
+   五维:街面 自律 良知 风险 牵挂(0–100)
+   ====================================================================== */
+const INITIAL = { 街面:25, 自律:20, 良知:55, 风险:15, 牵挂:45 };
+const START = "c1_age11";
+/* 进度估算用:主线节点深度(用于顶部进度条) */
+const TOTAL_DEPTH = 11;
+
+const STAT_META = {
+  街面:{ en:"STREET",     color:"var(--street)" },
+  自律:{ en:"DISCIPLINE", color:"var(--disc)"   },
+  良知:{ en:"CONSCIENCE", color:"var(--consc)"  },
+  风险:{ en:"HEAT",       color:"var(--heat)"   },
+  牵挂:{ en:"BONDS",      color:"var(--bond)"   },
+};
+
+const SCENES = {
+  /* ====================== 第一章 · 南城的孩子 ====================== */
+  c1_age11:{ depth:1, act:"第一章 · 南城的孩子",
+    age:"十一", ageNote:"岁", era:"芝加哥南城 · 冬",
+    title:"序 · 这条街",
+    lines:[
+      "南城的冬天,风从密歇根湖一路刮过来,钻进加拉格家每一道没补好的墙缝。客厅地板上,父亲弗兰克四仰八叉,身下一摊隔夜的啤酒。",
+      "你叫卡尔·加拉格,排行老五。母亲很久没回家了,真正撑着这栋房子的,是大姐菲奥娜——十九岁,打两份工,管着六张要吃饭的嘴。",
+      "哥哥利普是全校最聪明的脑袋,二哥伊恩在打拳,妹妹黛比比谁都懂事,最小的利亚姆还在地毯上爬。而你——大人们提起你,总要顿一下,才挑出个词:「皮。」",
+      "放学路上,街角围了一圈人,有人蹲在地上数钱,数得很慢、很响。一个大孩子瞥见你,笑了:「加拉格家的小子?来,帮哥盯下梢,有人来就吹声口哨。」",
+    ],
+    choices:[
+      { text:"凑过去盯梢。这点小事,还能挣根棒棒糖", hint:"街面 + · 良知 − —— 第一步,总是最轻的",
+        effects:{ 街面:6, 风险:4, 良知:-3 }, next:"c2_age12" },
+      { text:"摇头跑开,回家帮菲奥娜看着利亚姆", hint:"牵挂 + · 自律 + —— 你认得回家的方向",
+        effects:{ 牵挂:8, 自律:5, 街面:-3 }, next:"c2_age12" },
+      { text:"站着没动,只把这一切看进眼里", hint:"良知 + —— 你还在学这条街的规矩",
+        effects:{ 良知:4, 自律:2 }, next:"c2_age12" },
+    ],
+  },
+
+  c2_age12:{ depth:2, act:"第一章 · 南城的孩子",
+    age:"十二", ageNote:"岁", era:"芝加哥南城 · 春",
+    title:"一 · 铁的重量",
+    lines:[
+      "十二岁这年,你迷上了一样东西:枪。",
+      "不是为了打谁——是那种握在手里的重量,冷的、沉的,让一个总被大人忽略的孩子,第一次觉得自己「算个东西」。你攒零件、拆鞭炮、在后院点小火,菲奥娜没收了你三回打火机。",
+      "学校里,高两届的混混常堵着低年级要钱。这天他抢了黛比的午饭钱,还推了她一把。黛比没哭,只是回头,看了你一眼。",
+      "你口袋里,正揣着昨天从邻居车库顺来的一把旧气枪。它没多大杀伤力,可掏出来的那一下,足够吓住任何人。",
+    ],
+    choices:[
+      { text:"掏枪。让他知道,加拉格家的人不好惹", hint:"街面 ++ · 风险 + · 良知 − —— 你尝到了「被怕」的滋味",
+        effects:{ 街面:12, 风险:8, 良知:-6 }, set:{ gun:true }, next:"c3_age13" },
+      { text:"枪没掏,只是冲上去跟他扭打", hint:"街面 + · 风险 + —— 用拳头,不用铁",
+        effects:{ 街面:4, 风险:4, 良知:5 }, next:"c3_age13" },
+      { text:"拉起黛比就走,午饭钱不要了", hint:"牵挂 ++ · 街面 − —— 有的东西比面子重要",
+        effects:{ 牵挂:10, 良知:5, 街面:-5 }, next:"c3_age13" },
+    ],
+  },
+
+  c3_age13:{ depth:3, act:"第一章 · 南城的孩子",
+    age:"十三", ageNote:"岁 · 第一个七年", era:"芝加哥南城 · 冬",
+    title:"二 · 二十块",
+    lines:[
+      "十三岁,你已经懂了这条街最实在的算术:一包东西,从这只手到那只手,中间能落下多少。",
+      "高架桥下,大孩子尼克——这一带的「批发商」——朝你晃了晃手里的小包:「跑一趟,二十块。送到三个街区外,塞进信箱,回来拿钱。简单。」",
+      "二十块。够黛比一周的牛奶,够给利亚姆买双不漏脚趾的鞋。菲奥娜这个月的房租,还差六十。",
+      "尼克看出了你的犹豫,把烟头一摁:「想啥呢小子。你以为你哥利普读那么多书,这条街就认他?这条街只认一样东西——谁敢上手。」",
+    ],
+    choices:[
+      { text:"接过来。我上手", hint:"街面 ++ · 风险 ++ —— 钱来得快,也来得脏",
+        effects:{ 街面:12, 风险:12, 自律:-5, 良知:-3 }, set:{ inGame:true }, next:"c4_age14" },
+      { text:"「我哥那条路,也许更远。」转身回家", hint:"自律 ++ · 牵挂 + —— 你押了另一种可能",
+        effects:{ 自律:12, 良知:6, 街面:-6, 牵挂:4 }, next:"c4_age14" },
+      { text:"「就这一次。」钱拿了,东西送了,别扭了一路", hint:"街面 + · 良知 − —— 没有「就这一次」",
+        effects:{ 街面:6, 风险:6, 良知:-4 }, set:{ inGame:true }, next:"c4_age14" },
+    ],
+  },
+
+  /* ====================== 第二章 · 入行 ====================== */
+  c4_age14:{ depth:4, act:"第二章 · 入行",
+    age:"十四", ageNote:"岁 · 第二个七年", era:"芝加哥南城 · 夏",
+    title:"三 · 上手",
+    lines:[
+      "一年下来,你不再是「跑腿的」。尼克手底下的人翻了车进了局子,你顶上了他的位置:管两个街角,手下三四个比你还小的孩子。",
+      "你学会把货按克分装,学会认便衣的鞋,学会交易时把后背靠墙。第一次有人因为欠钱跪在你面前求情,你愣了一下——然后想起,这就是「上手」的代价。",
+      "利普把你堵在巷子里。他刚拿到大学录取通知,气得发抖:「你知道这条路尽头是什么吗?要么牢里,要么土里!妈的卡尔,你才十四!」",
+      "你看着哥哥手里那张通往另一个世界的纸,忽然不知道该说什么。",
+    ],
+    choices:[
+      { text:"「你有你的纸,我有我的街。各走各的。」", hint:"街面 + · 牵挂 − —— 你把哥哥推开了",
+        effects:{ 街面:10, 风险:6, 牵挂:-8, 良知:-4 }, next:"c5_age15" },
+      { text:"「我也想出去。可这月房租,你那张纸付得了吗?」", hint:"牵挂 + · 良知 + —— 你还在为这个家算账",
+        effects:{ 牵挂:8, 良知:6, 自律:4, 街面:-2 }, next:"c5_age15" },
+      { text:"什么都没说,把当天挣的一半塞进了家里的饼干盒", hint:"牵挂 + · 风险 + —— 脏钱,也是给家的钱",
+        effects:{ 牵挂:6, 街面:4, 风险:4 }, next:"c5_age15" },
+    ],
+  },
+
+  c5_age15:{ depth:5, act:"第二章 · 入行",
+    age:"十五", ageNote:"岁", era:"芝加哥南城 · 秋",
+    title:"四 · 上尉",
+    lines:[
+      "十五岁,你梳起了脏辫,街角的人开始叫你「上尉」。那是个名号,也是个靶子。",
+      "钱是真的。你给菲奥娜垫过两次房租,给黛比买过裙子,给利亚姆交了托儿所的钱——尽管他们都猜得到这钱的来路,饭桌上没人说破。",
+      "一个十二岁的小孩天天跟在你屁股后头,大家叫他「小不点」。他管你叫「上尉」,眼睛发亮,书包里开始装你给的小包。你在他身上,看见了高架桥下那个十三岁的自己。",
+      "与此同时,东边一伙人盯上了你的街角。冲突,是迟早的事。",
+    ],
+    choices:[
+      { text:"把小不点收进队伍带他「上手」,顺势壮大声势顶东边", hint:"街面 ++ · 良知 −− —— 你成了当年的尼克",
+        effects:{ 街面:14, 风险:10, 良知:-12 }, set:{ usedKid:true }, next:"c6_age16" },
+      { text:"把小不点轰回家,塞他二十块去报名球队", hint:"良知 ++ · 牵挂 + —— 你想拦下一个自己",
+        effects:{ 良知:14, 牵挂:8, 街面:-6 }, set:{ savedKid:true }, next:"c6_age16" },
+      { text:"谁也不带,自己单干,把钱往床板下藏,攒退路", hint:"自律 ++ · 街面 − —— 你开始想「以后」",
+        effects:{ 自律:12, 街面:-4, 良知:2 }, set:{ stash:true }, next:"c6_age16" },
+    ],
+  },
+
+  c6_age16:{ depth:6, act:"第二章 · 入行",
+    age:"十六", ageNote:"岁 · 第三个七年", era:"芝加哥南城 → 少管所",
+    title:"五 · 铁门",
+    lines:[
+      "迟早会有这一天。一次交易撞上便衣——也许有人通风报信,也许只是运气用光了。手铐扣上的瞬间,你才十六岁。",
+      "少管所。三个月,你学会怎么在更小的笼子里活下去:怎么排队、怎么忍、怎么在淋浴间把后背靠墙。你也终于看清这条路的尽头——要么是这里,要么是停尸房,没有第三种。",
+      "出来那天,菲奥娜在铁门外等你,眼睛是肿的。她什么都没骂,只把三样东西塞进你手里:一所军事高中的招生简章、一份汉堡店的招工表,还有一句话。",
+      "「卡尔。」她声音哑得厉害,「这个家送走过太多人了。我不想再去任何一个铁门外面等你。这一次,你自己选。」",
+      "巷子另一头,旧日的兄弟在车里冲你按喇叭;马路对面,总在图书馆看书、父亲是老警察的多米尼克,正望过来。几条路,在你脚下叉开。",
+    ],
+    choices:[
+      { text:"去军校。我受够了在这条街上等死", hint:"自律 ++ · 风险 −− —— 最难走,也最远",
+        effects:{ 自律:14, 良知:8, 街面:-10, 风险:-12 }, next:"m1_age17" },
+      { text:"撕了那两张表。这条街才是我的,我要拿回我的片区", hint:"街面 ++ · 风险 ++ —— 回到熟悉的深渊",
+        effects:{ 街面:16, 风险:14, 良知:-8 }, next:"k1_age17" },
+      { text:"去汉堡店打工,跟着多米尼克,试试「普通人」的活法", hint:"牵挂 ++ · 良知 + —— 平凡是最难的反叛",
+        effects:{ 牵挂:14, 良知:10, 自律:6, 街面:-10 }, next:"f1_age17" },
+    ],
+  },
+
+  /* ====================== 第三章 · 军校线 ====================== */
+  m1_age17:{ depth:7, act:"第三章 · 钢与汗",
+    age:"十七", ageNote:"岁 · 军校", era:"南方某州 · 军事高中",
+    title:"六 · 第一周",
+    lines:[
+      "军校的第一周,你被罚跑到吐。这里没人在乎你是不是「上尉」,教官只问你能不能把被子叠成方块、能不能三分钟内系好靴带。",
+      "你恨这里。恨到第四天,你已经计划好怎么翻墙逃回芝加哥。可熄灯之后躺在硬板床上,你忽然意识到——你已经连着四天,没碰货、没打架、没偷过任何东西。这在南城,是你十七年来做不到的。",
+      "同宿舍一个富人区来的白人小子,处处看不起你,故意把你的靴子扔进泥里。所有人都在等你动手——动手就是退学,退学就是回南城。",
+    ],
+    choices:[
+      { text:"捡起靴子,一声不吭擦干净。这点气,我忍得起", hint:"自律 ++ —— 忍,是你从没练过的肌肉",
+        effects:{ 自律:14, 良知:4 }, next:"m2_age18" },
+      { text:"把他摁在墙上,但松了手,只留一句狠话", hint:"街面 + · 自律 − · 风险 + —— 旧本能还在",
+        effects:{ 街面:8, 自律:-6, 风险:6 }, next:"m2_age18" },
+      { text:"去找教官,按规矩举报他", hint:"良知 + · 街面 − —— 在南城这叫告密,在这里这叫规则",
+        effects:{ 良知:8, 自律:6, 街面:-6 }, next:"m2_age18" },
+    ],
+  },
+
+  m2_age18:{ depth:8, act:"第三章 · 钢与汗",
+    age:"十八", ageNote:"岁", era:"军校 ↔ 芝加哥南城",
+    title:"七 · 回不回头",
+    lines:[
+      "一年过去,你拿了两枚操行章,体重涨了二十磅,全是肌肉。教官第一次叫你名字时,没有皱眉。",
+      "假期回南城,空气还是那个味道。老街角的人远远认出你,吹了声口哨:「哟上尉,当兵去啦?要不要回来帮老朋友看场子,一晚的钱顶你那破学校一学期。」",
+      "更糟的是,你看见小不点了——他长高了些,脖子上挂着金链子,梳着和你当年一样的脏辫,正蹲在你从前那个街角分货。他看见你,咧嘴一笑:「上尉!你回来啦!」",
+    ],
+    freeInput:{ q:"看着小不点脸上那种你太熟悉的光,卡尔心里堵得厉害。让他对小不点(或对自己)说一句话 ——",
+      placeholder:"（留空也可直接继续）" },
+    choices:[
+      { text:"蹲下平视他:「这条路没有尽头。趁还来得及,扔了它。」然后转身上了回程的大巴", hint:"自律 ++ · 良知 ++ · 风险 − —— 你赢了那个旧的自己",
+        effects:{ 自律:14, 良知:12, 风险:-8 }, set:{ warnedKid:true }, next:"m3_age19" },
+      { text:"「就帮最后一晚。看在老交情。」", hint:"街面 + · 风险 ++ · 自律 −− —— 一只脚又踏回去了",
+        effects:{ 街面:10, 风险:16, 自律:-12, 良知:-6 }, set:{ slipped:true }, next:"m3_age19" },
+    ],
+  },
+
+  m3_age19:{ depth:9, act:"第三章 · 钢与汗",
+    age:"十九", ageNote:"岁 · 第三个七年的尾声", era:"军校 · 毕业",
+    title:"八 · 一纸文凭",
+    lines:[
+      "毕业那天,你站在队列里,军帽压得很正。台下,菲奥娜哭花了妆,利普难得没带讽刺地拍手,连弗兰克都难得清醒地坐在最后一排——虽然多半是为了蹭顿免费自助餐。",
+      "教官把毕业证递给你时只说一句:「加拉格,你是我带过最不该走到这里、却真的走到了的兵。」",
+      "回芝加哥的火车上,你望着窗外掠过的、和南城一模一样的破败街区,心里第一次冒出一个荒唐的念头——一个连你自己都吓一跳的念头。",
+    ],
+    choices:[
+      { text:"「这些街,需要的不是又一个上尉。也许……需要一个从里面走出来、又愿意走回去的人。」", hint:"良知 ++ · 自律 + —— 一个荒唐又认真的念头",
+        effects:{ 良知:10, 自律:8 }, set:{ copDream:true }, next:"fin_cop" },
+      { text:"「我尽力了。剩下的,不归我管。」找份安稳工作,过普通日子", hint:"自律 + · 牵挂 + —— 也是一种体面的收场",
+        effects:{ 自律:8, 牵挂:6, 街面:-4 }, next:"fin_quiet" },
+    ],
+  },
+
+  /* ====================== 第三章 · 片区线 ====================== */
+  k1_age17:{ depth:7, act:"第三章 · 王座",
+    age:"十七", ageNote:"岁 · 街角", era:"芝加哥南城 · 冬",
+    title:"六 · 拿回来",
+    lines:[
+      "你拿回了片区,而且比从前更大。东边那伙人退了——有人说是怕你,有人说是怕你手里那把跟了你好几年的枪。",
+      "钱多到你给加拉格家换了新锅炉,给意外当了妈的黛比买了整箱尿布。可菲奥娜把你给的钱原封不动塞回你手里,只说:「我宁可冻着。」",
+      "凯西迪——那个像汽油一样一点就着的女孩——缠上了你。她爱你的钱、你的枪、你身上那股随时会出事的劲儿。和她在一起,每天都像踩在刀尖上,刺激得让人上瘾。",
+      "弗兰克开始来你这儿蹭货。你看着父亲伸过来、抖个不停的那只手,忽然有点恍惚。",
+    ],
+    choices:[
+      { text:"给弗兰克货,留凯西迪在身边。这就是我要的:刺激、有钱、说了算", hint:"街面 ++ · 良知 −− · 牵挂 − —— 你正变成你最熟悉的那种人",
+        effects:{ 街面:12, 风险:10, 良知:-12, 牵挂:-6 }, set:{ feedFrank:true }, next:"k2_age18" },
+      { text:"把弗兰克轰出去:「你毁了一个家,别想从我这儿拿一克」", hint:"良知 + · 牵挂 + —— 刀子嘴,底下还有点东西",
+        effects:{ 良知:8, 牵挂:6, 街面:2 }, next:"k2_age18" },
+      { text:"开始悄悄把现金换成干净的东西囤起来,也许有一天用得上", hint:"自律 + · 街面 − —— 王座底下,你藏了张逃生图",
+        effects:{ 自律:10, 街面:-4 }, set:{ stash:true }, next:"k2_age18" },
+    ],
+  },
+
+  k2_age18:{ depth:8, act:"第三章 · 王座",
+    age:"十八", ageNote:"岁", era:"芝加哥南城 · 雨季",
+    title:"七 · 血",
+    lines:[
+      "树大招风。东边那伙人没真的退,他们在等。一个雨夜,他们朝你的车开了枪。子弹擦着你的耳朵钉进车门,而坐在副驾的小不点——那个总叫你「上尉」的孩子——没那么走运。",
+      "他死在你怀里,十四岁,脖子上还挂着那条廉价的金链子。雨水把血冲得到处都是,你怎么按都按不住。",
+      "缉毒科的探员蹲了你大半年,这下有了由头,天天在你楼下转。而你的人都在等你一句话:打回去,还是收手。",
+    ],
+    choices:[
+      { text:"打回去。血债血偿,得让这条街知道动我「上尉」是什么下场", hint:"街面 ++ · 风险 +++ · 良知 −− —— 你把自己彻底交给了这条街",
+        effects:{ 街面:12, 风险:20, 良知:-10 }, set:{ killed:true, kidDied:true }, next:"k3_age19" },
+      { text:"收手。把小不点好好埋了,然后……我第一次不知道该怎么办", hint:"良知 ++ · 风险 − · 街面 − —— 一个孩子的死,砸醒了你",
+        effects:{ 良知:14, 风险:-8, 街面:-10, 自律:6 }, set:{ kidDied:true }, next:"k3_age19" },
+    ],
+  },
+
+  k3_age19:{ depth:9, act:"第三章 · 王座",
+    age:"十九", ageNote:"岁 · 尽头", era:"芝加哥南城 · 深夜",
+    title:"八 · 红与蓝",
+    lines:[
+      "事情滚下了坡,再没停过。你睡觉睁着一只眼,枪不离身。数不清的影子在你身后,也在你对面。",
+      "又一个深夜,高架桥下枪声炸开。等硝烟散了,你站在积水里,手里攥着那把枪,脚下晃动着红蓝交错的光——警笛由远及近,越来越近。",
+      "你忽然累了。一种从骨头里渗出来的累。你想起十三岁那个冬天,尼克摁灭烟头说「这条街只认谁敢上手」。原来,这就是「上手」的尽头。",
+    ],
+    choices:[
+      { text:"扔了枪,举起手,跪下。该结束了", hint:"良知 + · 风险 − —— 在悬崖最后一寸收住脚",
+        effects:{ 良知:10, 风险:-6, 街面:-8, 自律:6 }, set:{ surrendered:true }, next:"fin_reckon" },
+      { text:"翻墙就跑。这局还没完,我命大", hint:"风险 +++ · 自律 − —— 把命押上赌桌的最后一注",
+        effects:{ 街面:8, 风险:18, 自律:-8 }, next:"fin_reckon" },
+    ],
+  },
+
+  /* ====================== 第三章 · 普通人线 ====================== */
+  f1_age17:{ depth:7, act:"第三章 · 普通人",
+    age:"十七", ageNote:"岁 · 汉堡店", era:"芝加哥南城 · 春",
+    title:"六 · 时薪八块",
+    lines:[
+      "你把脏辫剪了,换上一身蠢得要命的红黄制服,在汉堡店翻肉饼。时薪八块,比你从前一晚的零头还少。",
+      "前三个星期简直是酷刑。你手痒、心慌、半夜惊醒。可你也发现一件怪事:你开始睡得着觉了。没人半夜砸你的门,没有便衣跟着你,菲奥娜看你的眼神,变了。",
+      "多米尼克成了你的女朋友。她父亲是个干了三十年的老警察,一开始横竖看不上你,见面就冷哼:「街上的混混,洗不白。」可多米尼克信你。",
+      "旧兄弟没放过你。一天打烊,他们堵在后门:一笔大买卖,缺个信得过的人盯场,一晚的钱够你在这破店翻半年肉饼。",
+    ],
+    choices:[
+      { text:"「我不干了。」关上后门,回去擦我的柜台", hint:"自律 ++ · 良知 ++ · 风险 − —— 最朴素也最难的一个「不」",
+        effects:{ 自律:14, 良知:12, 风险:-8, 街面:-8 }, set:{ saidNo:true }, next:"f2_age18" },
+      { text:"「就这一票。我想给多米尼克一个像样的将来。」", hint:"风险 ++ · 自律 − —— 退路上的回头路,最危险",
+        effects:{ 街面:8, 风险:16, 自律:-10 }, set:{ oneMore:true }, next:"f2_age18" },
+      { text:"没去,但把消息透给了多米尼克的父亲", hint:"良知 + · 街面 −− —— 你选了规则,也烧了旧船",
+        effects:{ 良知:8, 街面:-12, 自律:6, 风险:-4 }, set:{ toldCop:true }, next:"f2_age18" },
+    ],
+  },
+
+  f2_age18:{ depth:8, act:"第三章 · 普通人",
+    age:"十八", ageNote:"岁", era:"芝加哥南城 · 夏",
+    title:"七 · 薄墙之家",
+    lines:[
+      "你和多米尼克攒钱租了间小公寓。墙是薄的,暖气一响一夜,可那是你们俩的。你升了汉堡店小组长,时薪涨到十一块。",
+      "第二天的新闻里,那帮旧兄弟全被铐进了局子,缉毒科端了整个窝——那本该有你一个。多米尼克看着电视没说话,只是把手放在你手上。",
+      "你哥利普来看你。这个曾经对你彻底失望的人,环顾这间寒酸却干净的小屋,半天憋出一句:「……妈的卡尔。我们家居然真有人,把日子过明白了。」",
+      "可平静底下也有暗涌:钱总是不够,弗兰克隔三差五来要钱、闹事,提醒着你血缘这东西甩也甩不掉。",
+    ],
+    choices:[
+      { text:"稳住。多兼一份夜班,慢慢来,我不急", hint:"自律 + · 牵挂 + —— 把日子过成日子",
+        effects:{ 自律:10, 牵挂:8, 良知:4 }, next:"f3_age19" },
+      { text:"多米尼克的父亲退休了,递给你一份警校简章:「你身上有股劲儿,别浪费在烤肉饼上。」——你盯着它", hint:"自律 + · 良知 + —— 一扇你从没想过的门",
+        effects:{ 自律:8, 良知:8 }, set:{ copOffer:true }, next:"f3_age19" },
+    ],
+  },
+
+  f3_age19:{ depth:9, act:"第三章 · 普通人",
+    age:"十九", ageNote:"岁 · 路口", era:"芝加哥南城 · 秋",
+    title:"八 · 普通人的勇气",
+    lines:[
+      "十九岁。你已经在这条「普通」的路上走了整整两年。两年里没挣过大钱,没出过风头,可你也没进过一次局子,没让任何人为你在铁门外哭过。",
+      "多米尼克怀孕了。这个消息像一块石头砸进你心里那口古井——你想起弗兰克,想起自己是被怎样养大的,一阵恐惧攫住你:我会不会,变成他?",
+      "夜里,你站在薄墙公寓的窗前,看着南城零零落落的灯火。桌上,那份警校简章被翻得起了毛边。",
+    ],
+    freeInput:{ q:"将为人父的卡尔站在窗前,对着这座养大他、也差点埋了他的城市,说一句话 ——",
+      placeholder:"（留空也可直接继续）" },
+    choices:[
+      { text:"拿起警校简章:「我不想只是『不学坏』。我想真的,保护点什么。」", hint:"自律 ++ · 良知 ++ —— 从「不害人」到「护人」的一跃",
+        effects:{ 自律:12, 良知:12, 牵挂:6 }, set:{ copDream:true }, next:"fin_cop" },
+      { text:"把简章收进抽屉:「我不当英雄。我只想守着这间薄墙的家,守着你们。」", hint:"牵挂 ++ · 良知 + —— 平凡的厮守,也是一生的承诺",
+        effects:{ 牵挂:14, 良知:8, 自律:6, 街面:-4 }, set:{ married:true }, next:"fin_home" },
+    ],
+  },
+
+  /* ====================== 终章 · 各自的尽头 ====================== */
+  fin_cop:{ depth:10, act:"终章 · 另一边",
+    age:"二十", ageNote:"岁 · 第三个七年之后", era:"芝加哥 · 警察学院",
+    title:"终 · 另一边",
+    lines:[
+      "警察学院的报名处,空调开得很足。你填表的手,曾经握过枪、分过货、按住过一个朋友的颈动脉。现在,它握着一支笔。",
+      "南城长大的孩子去当条子——这话要是传回老街角,能笑掉半条街的牙。可你比这世上任何人都清楚,这条街缺的到底是什么:不是更多的枪,是一个真正懂它、又肯护着它的人。",
+      "训练很苦。体能你不怵,难的是法条、是程序、是把「以暴制暴」的旧本能一寸寸改成「依规矩办事」。好几次你想放弃,是菲奥娜一句话把你按住:「卡尔·加拉格,你已经走了这么远了。」",
+      "结业考核最后一项,面试官翻着你那份不堪入目的少年犯罪记录,抬眼看你:「就凭这份档案,我有一百个理由刷掉你。给我一个,留下你的理由。」",
+    ],
+    choices:[
+      { text:"「这份档案里的每一条,都是我现在最想拦住别人去做的事。没人比我更懂他们为什么会上手,也没人比我更想拉他们一把。」", hint:"良知 ++ · 自律 + —— 你的伤疤,成了你的勋章",
+        effects:{ 良知:10, 自律:8, 风险:-6 }, set:{ becameCop:true }, next:"__end__" },
+      { text:"「……我不知道。我只是不想再回那条街当上尉了。」", hint:"自律 − —— 真话,可惜不够",
+        effects:{ 自律:-5, 良知:2 }, next:"__end__" },
+    ],
+  },
+
+  fin_quiet:{ depth:10, act:"终章 · 收场",
+    age:"二十", ageNote:"岁", era:"芝加哥 · 城西",
+    title:"终 · 安稳",
+    lines:[
+      "你没去当什么警察。退伍后,你在城西一家物流仓库找了份稳定的活:扛箱子、开叉车,按时上下班,按时领薪水。",
+      "日子平淡得像一张白纸。可对一个加拉格家的人来说,「平淡」两个字,是用前十几年的兵荒马乱换来的奢侈品。",
+      "你偶尔开车经过南城的老街角,放慢速度,看一眼,又踩下油门。那里的故事还在继续,只是,已经不是你的了。",
+    ],
+    choices:[
+      { text:"给菲奥娜打了个电话:「姐,我挺好的。真的。」", hint:"牵挂 + · 良知 + —— 报一声平安",
+        effects:{ 牵挂:8, 良知:6 }, next:"__end__" },
+      { text:"把车窗摇上,谁也没联系,一个人开回空荡荡的出租屋", hint:"牵挂 − —— 安稳,有时也很孤独",
+        effects:{ 牵挂:-6, 自律:4 }, next:"__end__" },
+    ],
+  },
+
+  fin_reckon:{ depth:10, act:"终章 · 清算",
+    age:"二十", ageNote:"岁", era:"芝加哥南城 · 黎明前",
+    title:"终 · 清算",
+    lines:[
+      "这条路的账,总是要算的。区别只在于,是当场算清,还是拖着利息,在某个黎明前一次性引爆。",
+      "你这些年挣的、抢的、欠的、流的血,此刻都摆上了同一张桌子。没有谁能永远坐在那张王座上——尼克没有,你之前的人没有,你也不会有。",
+      "天快亮了。南城的轮廓在灰蓝色的晨雾里浮出来,和你十三岁那天看到的一模一样。只是看它的那个孩子,早已不见了。",
+    ],
+    choices:[
+      { text:"认了。无论接下来是铁窗还是黄土,这都是我一步步自己选的", hint:"良知 + —— 最后的清醒",
+        effects:{ 良知:6 }, next:"__end__" },
+      { text:"到这一步,还在想着怎么翻盘,怎么再赢一把", hint:"风险 + · 自律 − —— 有些人到最后也不肯下牌桌",
+        effects:{ 风险:8, 自律:-6, 街面:4 }, next:"__end__" },
+    ],
+  },
+
+  fin_home:{ depth:10, act:"终章 · 厮守",
+    age:"廿一", ageNote:"岁 · 第四个七年之初", era:"芝加哥南城 · 冬",
+    title:"终 · 薄墙之家",
+    lines:[
+      "孩子出生在一个下雪的清晨。你抱着那团小小的、皱巴巴的、哭得震天响的生命,手抖得比当年握枪时还厉害。",
+      "给他取名时,你特意避开了「弗兰克」,也避开了任何一个街角的名号。你要他这辈子,和这两样东西都没有关系。",
+      "多米尼克靠在你肩上。薄墙外面,南城的风还是那个风。可这一次,风里那个总在墙缝里发抖的孩子,长成了为别人挡风的人。",
+    ],
+    choices:[
+      { text:"在孩子耳边轻声说:「听着小子,你脚下这条街,不是你的判决书。这是你老爸用半辈子才弄明白的事。」", hint:"牵挂 ++ · 良知 ++ —— 你把那盏灯,传了下去",
+        effects:{ 牵挂:10, 良知:10 }, next:"__end__" },
+      { text:"只是久久地抱着他,什么也说不出来,眼泪砸在襁褓上", hint:"牵挂 + —— 有些话,要用一辈子去说",
+        effects:{ 牵挂:8, 良知:4 }, next:"__end__" },
+    ],
+  },
+};
+
+/* ======================================================================
+   结局裁定:五维加权 + 关键 flag,按优先级裁定十一种收束
+   ====================================================================== */
+function judgeEnding(s, f){
+  const E = (id,title,en,rarity,rColor,verse)=>({id,title,en,rarity,rColor,verse});
+
+  // —— 致命/牢狱(片区线高风险) ——
+  if (!f.surrendered && s.风险 >= 78 && s.自律 < 48 && s.街面 >= 55)
+    return E("death","高架之下","UNDER THE EL","惨烈结局","var(--heat)",
+      "高架桥的灯一盏盏灭了。他们在你出生的那条街上,为你留了一小块墙,喷上你的名字——「上尉」,二十岁。"
+      + (f.kidDied ? "墙根下,有人放了一条廉价的金链子,和一束很快会被雨打烂的花。" : "这条街又吞掉了一个,本来还有别的可能的孩子。"));
+
+  if (s.风险 >= 64)
+    return E("prison","铁窗十年","HARD TIME","沉重结局","var(--amber)",
+      "法槌落下那一刻你才真正想明白:这条街塞给你的每一分钱,背面都标好了价钱,只是账单来得晚了点。铁门合上,这一次,没有三个月的期限。"
+      + (f.killed ? "你闭上眼,总能看见那个雨夜,和你没能护住的那个孩子。" : ""));
+
+  // —— 警徽(全剧最难抵达 · 真实结局) ——
+  if (f.becameCop)
+    return E("badge","警徽加身","THE BADGE","极罕见 · 真实结局","var(--ink)",
+      "你穿上那身蓝制服,走回南城的街角。曾经叫你「上尉」的人,如今喊你「警官」。这条街终于多了一个——从它里面走出去、又走回来护着它的人。"
+      + (f.married ? "下班回到那间薄墙的家,有人给你留着灯。" : ""));
+
+  // —— 厮守(普通人线 · 成家) ——
+  if (f.married && s.牵挂 >= 58)
+    return E("home_love","良人","THE HOME WE BUILT","温暖结局","var(--bond)",
+      "你没大富大贵,守着一份准时发薪的工作,守着身边的人和那个不会叫「弗兰克」的孩子。深夜起来喂奶,你常常看着窗外的老街角发呆——幸好,你认得回家的路,也终于成了能为别人指路的人。");
+
+  // —— 钢铁纪律(军校线 · 高度自律未当警) ——
+  if (s.自律 >= 62)
+    return E("steel","钢铁纪律","STEEL","坚实结局","var(--disc)",
+      "你没成为英雄,只是学会了把每一件小事做对:按时起床,叠好被子,从不食言。对一个加拉格家的人来说,这已经近乎奇迹。");
+
+  // —— 灯火(救了一个孩子 · 高良知 · 走出了街) ——
+  if ((f.savedKid || f.warnedKid) && s.良知 >= 60 && s.街面 < 52)
+    return E("torch","传灯人","PASS THE TORCH","明亮结局","var(--consc)",
+      "你这辈子最骄傲的事,不是自己走了出来,是你拦下了一个还来得及回头的孩子。多年以后,那个本该叫别人「上尉」的少年,在社区中心做志愿者,逢人就讲:「有个人告诉过我,这条路没有尽头。」");
+
+  // —— 回家的人(高良知低街面) ——
+  if (s.良知 >= 58 && s.街面 < 50)
+    return E("way_home","回家的人","THE WAY HOME","温暖结局","var(--consc)",
+      "你没大富大贵,守着一份准时发薪的工作,守着身边的人。深夜路过老街角,你会想起十三岁那个冬天——幸好,你认得回家的路。");
+
+  // —— 孤狼(高街面高自律 · 但情义俱冷) ——
+  if (s.街面 >= 58 && s.自律 >= 52 && s.牵挂 < 40 && s.良知 < 46)
+    return E("wolf","孤狼","LONE WOLF","冷硬结局","var(--street)",
+      "你活下来了,而且活得很「成功」:没人敢动你,你算得清每一笔账,不留破绽,也不留软肋。只是某天你忽然发现,这世上已经没有一个人,会在你不回家的夜里,为你留一盏灯。你赢了这条街,输掉了所有能让赢有意义的东西。");
+
+  // —— 片区之王(高街面) ——
+  if (s.街面 >= 60)
+    return E("king","片区之王","THE CAPTAIN","危险结局","var(--amber)",
+      "你坐在自己的王座上,口袋鼓胀,身后是数不清的影子。没人敢动你——可你心里清楚,这个位子,从来没有人能坐到老。今天的太阳很好,你尽量不去想明天。");
+
+  // —— 弗兰克的影子(情义俱低 · 沉沦) ——
+  if (s.牵挂 < 36 && s.良知 < 46)
+    return E("frank","弗兰克的影子","FRANK'S SHADOW","无声结局","var(--muted)",
+      "钱花光了,人也散了,酒瓶子堆满水槽。某个清晨,你在镜子里看见了弗兰克的脸。这条街最狠的从来不是枪——是它能把人,变成自己最恨的那个样子。");
+
+  // —— 默认:无名之辈 ——
+  return E("drift","无名之辈","JUST ANOTHER NAME","平淡结局","var(--text-dim)",
+    "你既没坠入深渊,也没爬上高处。日子一天天过,像南城千千万万个普通人一样,在这座城市的褶皱里,不响,也不灭。也许这已经够好,也许,你心里始终留着一个没说出口的「本来可以」。");
+}
+
+const ENDINGS_TOTAL = 11;
+
+const EPILOGUE =
+  "《无耻之徒》里真实的卡尔·加拉格,从一个痴迷枪支、贩毒入狱的少年,一路走到军校、走进警校,"
++ "最终成为一名<b>警察</b>。这不是说教,而是说:<b>出身能决定你从哪里开始,却决定不了你在哪里结束。</b>"
++ "把人从泥潭里拉出来的从来不是运气,是一次次选了那条更难、却更对的路;是菲奥娜们没有松开的那只手。"
++ "卡尔的故事想告诉每一个十三岁的孩子:<b>你脚下的这条街,不是你的判决书。</b>";
+
+const GALLERY =
+  "<b>十一种结局:</b>警徽加身 · 钢铁纪律 · 良人 · 回家的人 · 传灯人 · 无名之辈 · "
++ "孤狼 · 片区之王 · 铁窗十年 · 高架之下 · 弗兰克的影子。<br>"
++ "你刚刚走完其中一种。三条主线、几十个岔路口,换几步,就是另一副人生。";
+
+/* ======================================================================
+   场景配图:内联 SVG 概念图(零依赖 · 离线 · 噪点水墨/黑色电影风)
+   ====================================================================== */
+const ART = {
+  house:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ho_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#222e3b"/><stop offset="1" stop-color="#0d1217"/></linearGradient><radialGradient id="ho_w" cx=".5" cy=".5" r=".7"><stop offset="0" stop-color="#f0c477"/><stop offset="1" stop-color="#a06f2e"/></radialGradient></defs><rect width="800" height="240" fill="url(#ho_s)"/><g fill="#aeb8c2" opacity=".5"><circle cx="120" cy="40" r="1.6"/><circle cx="300" cy="70" r="1.3"/><circle cx="520" cy="35" r="1.6"/><circle cx="680" cy="90" r="1.3"/><circle cx="420" cy="120" r="1.4"/><circle cx="220" cy="150" r="1.2"/><circle cx="600" cy="160" r="1.4"/><circle cx="740" cy="50" r="1.5"/></g><g fill="#0c1218"><polygon points="0,150 0,240 180,240 180,150 150,150 150,120 30,120 30,150"/><polygon points="180,160 180,240 360,240 360,130 270,90 180,130"/><polygon points="360,150 360,240 560,240 560,150 520,150 520,118 400,118 400,150"/><polygon points="560,165 560,240 800,240 800,140 690,100 560,140"/></g><g fill="#26303a"><rect x="30" y="118" width="120" height="5"/><rect x="400" y="116" width="120" height="5"/></g><rect x="250" y="150" width="34" height="40" rx="2" fill="url(#ho_w)"/><line x1="267" y1="150" x2="267" y2="190" stroke="#5c4321" stroke-width="2"/><line x1="250" y1="170" x2="284" y2="170" stroke="#5c4321" stroke-width="2"/><g fill="#161f27"><rect x="70" y="160" width="22" height="28"/><rect x="120" y="160" width="22" height="28"/><rect x="430" y="158" width="22" height="28"/><rect x="480" y="158" width="22" height="28"/><rect x="620" y="170" width="22" height="28"/></g><g stroke="#070a0d" stroke-width="3" fill="none"><path d="M730 240 L730 168 M730 190 L712 172 M730 184 L750 164 M730 174 L718 158 M730 200 L746 184"/></g></svg>`,
+
+  el:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="el_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2836"/><stop offset="1" stop-color="#0b0f13"/></linearGradient><radialGradient id="el_l" cx=".79" cy=".58" r=".5"><stop offset="0" stop-color="#c9803a" stop-opacity=".5"/><stop offset="1" stop-color="#c9803a" stop-opacity="0"/></radialGradient></defs><rect width="800" height="240" fill="url(#el_s)"/><rect y="196" width="800" height="44" fill="#070a0d"/><ellipse cx="630" cy="155" rx="180" ry="105" fill="url(#el_l)"/><rect x="0" y="58" width="800" height="30" fill="#0e151b"/><rect x="0" y="52" width="800" height="6" fill="#1b2530"/><g fill="#0a0f14"><rect x="70" y="88" width="16" height="110"/><rect x="250" y="88" width="16" height="110"/><rect x="430" y="88" width="16" height="110"/><rect x="610" y="88" width="16" height="110"/><rect x="775" y="88" width="16" height="110"/></g><g stroke="#141d25" stroke-width="3"><path d="M86 88 L250 150 M250 88 L86 150 M266 150 L430 88 M430 150 L266 88 M446 88 L610 150 M610 88 L446 150 M626 150 L775 88 M775 150 L626 88"/></g><rect x="607" y="120" width="6" height="78" fill="#070a0d"/><path d="M610 120 q22 0 24 14" stroke="#070a0d" stroke-width="4" fill="none"/><circle cx="635" cy="136" r="5" fill="#f0c074"/><g fill="#05070a"><ellipse cx="600" cy="198" rx="15" ry="5" opacity=".5"/><path d="M593 198 q0-26 7-28 q7 2 7 28 z"/><circle cx="600" cy="166" r="7"/></g></svg>`,
+
+  corner:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="co_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16131a"/><stop offset="1" stop-color="#0a0a0d"/></linearGradient><radialGradient id="co_l" cx=".16" cy=".42" r=".5"><stop offset="0" stop-color="#e0a050" stop-opacity=".4"/><stop offset="1" stop-color="#e0a050" stop-opacity="0"/></radialGradient><pattern id="co_b" width="44" height="22" patternUnits="userSpaceOnUse"><rect width="44" height="22" fill="#1a121a"/><rect width="42" height="20" fill="#1e141d"/><rect x="22" y="11" width="42" height="20" fill="#1e141d"/></pattern></defs><rect width="800" height="240" fill="url(#co_s)"/><rect x="0" y="40" width="800" height="190" fill="url(#co_b)" opacity=".85"/><ellipse cx="130" cy="130" rx="150" ry="130" fill="url(#co_l)"/><rect y="214" width="800" height="26" fill="#070709"/><rect x="124" y="34" width="6" height="150" fill="#08080a"/><path d="M127 38 q26 0 30 16" stroke="#08080a" stroke-width="4" fill="none"/><circle cx="158" cy="56" r="5" fill="#f0c074"/><text x="430" y="150" fill="#33404f" font-size="46" font-family="Georgia,serif" transform="skewX(-10)" opacity=".42" font-weight="700">SOUTH</text><g fill="#040507"><path d="M250 230 q-2-44 10-46 q12 2 10 46 z"/><circle cx="260" cy="176" r="9"/><path d="M300 230 q-2-40 9-42 q11 2 9 42 z"/><circle cx="309" cy="182" r="8"/></g></svg>`,
+
+  gate:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ga_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a222b"/><stop offset="1" stop-color="#0a0d11"/></linearGradient><radialGradient id="ga_l" cx=".5" cy="0" r=".7"><stop offset="0" stop-color="#aebfce" stop-opacity=".32"/><stop offset="1" stop-color="#aebfce" stop-opacity="0"/></radialGradient><pattern id="ga_f" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M0 0 L22 22 M22 0 L0 22" stroke="#36474f" stroke-width="1.4" fill="none"/></pattern></defs><rect width="800" height="240" fill="url(#ga_s)"/><ellipse cx="400" cy="20" rx="320" ry="120" fill="url(#ga_l)"/><rect y="206" width="800" height="34" fill="#070a0d"/><g fill="#05070a"><path d="M250 206 q-2-40 9-42 q11 2 9 42 z"/><circle cx="259" cy="160" r="8"/></g><rect x="0" y="56" width="800" height="150" fill="url(#ga_f)"/><g fill="#0c1116"><rect x="40" y="44" width="12" height="170"/><rect x="392" y="44" width="16" height="170"/><rect x="752" y="44" width="12" height="170"/></g><path d="M0 50 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0 q14 8 28 0 q14-8 28 0" stroke="#56666f" stroke-width="2" fill="none" opacity=".7"/><g stroke="#56666f" stroke-width="1"><path d="M20 44 L8 56 M40 44 L28 56 M60 46 L48 58 M120 46 L108 58 M140 44 L128 56"/></g></svg>`,
+
+  barracks:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="ba_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3a40"/><stop offset=".5" stop-color="#46504e"/><stop offset="1" stop-color="#161c1d"/></linearGradient></defs><rect width="800" height="240" fill="url(#ba_s)"/><ellipse cx="640" cy="70" rx="130" ry="54" fill="#d9c79a" opacity=".22"/><rect y="150" width="800" height="90" fill="#10201d"/><g fill="#0b1614"><rect x="60" y="120" width="420" height="40"/><polygon points="60,120 480,120 480,108 270,96 60,108"/></g><g fill="#26443c"><rect x="80" y="128" width="20" height="24"/><rect x="120" y="128" width="20" height="24"/><rect x="160" y="128" width="20" height="24"/><rect x="200" y="128" width="20" height="24"/><rect x="240" y="128" width="20" height="24"/><rect x="280" y="128" width="20" height="24"/><rect x="320" y="128" width="20" height="24"/><rect x="360" y="128" width="20" height="24"/><rect x="400" y="128" width="20" height="24"/><rect x="440" y="128" width="20" height="24"/></g><rect x="600" y="50" width="5" height="150" fill="#0c1412"/><path d="M605 54 L676 62 L605 80 Z" fill="#7d8a6e"/><circle cx="603" cy="50" r="4" fill="#c9b582"/></svg>`,
+
+  throne:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="th_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1518"/><stop offset="1" stop-color="#090708"/></linearGradient><radialGradient id="th_l" cx=".5" cy=".18" r=".55"><stop offset="0" stop-color="#e09a4a" stop-opacity=".5"/><stop offset=".6" stop-color="#a8443a" stop-opacity=".12"/><stop offset="1" stop-color="#a8443a" stop-opacity="0"/></radialGradient></defs><rect width="800" height="240" fill="url(#th_s)"/><ellipse cx="400" cy="120" rx="260" ry="150" fill="url(#th_l)"/><line x1="400" y1="0" x2="400" y2="40" stroke="#1c1410" stroke-width="2"/><circle cx="400" cy="44" r="6" fill="#ffcf86"/><polygon points="400,50 360,200 440,200" fill="#e09a4a" opacity=".07"/><g fill="#060405"><rect x="356" y="150" width="88" height="78"/><rect x="350" y="120" width="100" height="40" rx="6"/><path d="M372 120 q0-42 28-44 q28 2 28 44 z"/><circle cx="400" cy="92" r="15"/></g><g fill="#3a2c1a" opacity=".8"><rect x="300" y="196" width="26" height="10"/><rect x="330" y="200" width="26" height="9"/><rect x="470" y="198" width="26" height="10"/><rect x="500" y="202" width="22" height="8"/></g></svg>`,
+
+  rain:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="rn_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141d28"/><stop offset="1" stop-color="#080b0f"/></linearGradient><radialGradient id="rn_r" cx=".5" cy=".55" r=".45"><stop offset="0" stop-color="#bf3a2e" stop-opacity=".5"/><stop offset="1" stop-color="#bf3a2e" stop-opacity="0"/></radialGradient><pattern id="rn_p" width="16" height="46" patternUnits="userSpaceOnUse" patternTransform="rotate(14)"><line x1="0" y1="0" x2="0" y2="26" stroke="#8aa6c4" stroke-width="1" opacity=".22"/></pattern></defs><rect width="800" height="240" fill="url(#rn_s)"/><ellipse cx="400" cy="150" rx="240" ry="120" fill="url(#rn_r)"/><rect y="188" width="800" height="52" fill="#0a0e12"/><g fill="#05080b"><rect x="300" y="130" width="200" height="46" rx="14"/><rect x="330" y="108" width="140" height="34" rx="16"/><circle cx="340" cy="178" r="18"/><circle cx="460" cy="178" r="18"/></g><ellipse cx="400" cy="202" rx="170" ry="12" fill="#bf3a2e" opacity=".18"/><rect width="800" height="240" fill="url(#rn_p)"/></svg>`,
+
+  redblue:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="rb_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141c28"/><stop offset="1" stop-color="#080a0e"/></linearGradient><radialGradient id="rb_r" cx=".3" cy=".62" r=".4"><stop offset="0" stop-color="#d23a2e" stop-opacity=".55"/><stop offset="1" stop-color="#d23a2e" stop-opacity="0"/></radialGradient><radialGradient id="rb_b" cx=".7" cy=".62" r=".4"><stop offset="0" stop-color="#3a78d2" stop-opacity=".55"/><stop offset="1" stop-color="#3a78d2" stop-opacity="0"/></radialGradient></defs><rect width="800" height="240" fill="url(#rb_s)"/><rect x="0" y="56" width="800" height="26" fill="#0c151b"/><g fill="#0a0f14"><rect x="120" y="82" width="14" height="110"/><rect x="660" y="82" width="14" height="110"/></g><ellipse cx="250" cy="172" rx="240" ry="130" fill="url(#rb_r)"/><ellipse cx="560" cy="172" rx="240" ry="130" fill="url(#rb_b)"/><rect y="196" width="800" height="44" fill="#070a0d"/><g fill="#04060a"><path d="M392 196 q-2-40 8-42 q10 2 8 42 z"/><circle cx="400" cy="150" r="8"/></g><ellipse cx="400" cy="206" rx="150" ry="10" fill="#7a5a8a" opacity=".15"/></svg>`,
+
+  badge:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="bd_g" cx=".5" cy=".5" r=".62"><stop offset="0" stop-color="#2a4a72"/><stop offset="1" stop-color="#0a0f16"/></radialGradient><linearGradient id="bd_m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#aebdcd"/><stop offset="1" stop-color="#5c6f82"/></linearGradient></defs><rect width="800" height="240" fill="url(#bd_g)"/><ellipse cx="400" cy="120" rx="210" ry="125" fill="#5b8fd0" opacity=".18"/><g transform="translate(400 122)"><path d="M0 -78 C40 -78 64 -64 64 -64 C64 -10 54 44 0 76 C-54 44 -64 -10 -64 -64 C-64 -64 -40 -78 0 -78 Z" fill="url(#bd_m)" stroke="#cdd9e6" stroke-width="2"/><path d="M0 -68 C34 -68 54 -56 54 -56 C54 -8 46 38 0 66 C-46 38 -54 -8 -54 -56 C-54 -56 -34 -68 0 -68 Z" fill="none" stroke="#2c4661" stroke-width="2" opacity=".6"/><polygon points="0,-44 8,-20 33,-20 13,-5 20,19 0,5 -20,19 -13,-5 -33,-20 -8,-20" fill="#2c4661"/><text x="0" y="50" fill="#22323f" font-size="12" font-family="Georgia,serif" text-anchor="middle" letter-spacing="2">SOUTH SIDE</text></g></svg>`,
+
+  burger:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bu_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15202b"/><stop offset="1" stop-color="#0a0d11"/></linearGradient><linearGradient id="bu_w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0c878"/><stop offset="1" stop-color="#b07c2e"/></linearGradient></defs><rect width="800" height="240" fill="url(#bu_s)"/><rect y="200" width="800" height="40" fill="#070a0d"/><rect x="120" y="70" width="560" height="134" fill="#11161c"/><rect x="120" y="62" width="560" height="12" fill="#1b242d"/><rect x="160" y="96" width="320" height="90" fill="url(#bu_w)" opacity=".92"/><rect x="160" y="150" width="320" height="36" fill="#7a531c" opacity=".5"/><g fill="#0a0d11"><path d="M250 186 q-2-30 7-31 q9 1 7 31 z"/><circle cx="257" cy="150" r="7"/></g><g transform="translate(580 116)"><ellipse cx="0" cy="-14" rx="34" ry="14" fill="#e0a85a"/><rect x="-34" y="-14" width="68" height="12" fill="#b5663a"/><ellipse cx="0" cy="-2" rx="34" ry="9" fill="#6e9a4a"/><rect x="-34" y="-2" width="68" height="10" fill="#caa24e"/><ellipse cx="0" cy="10" rx="34" ry="14" fill="#e0a85a"/><g fill="#fff" opacity=".7"><circle cx="-14" cy="-18" r="1.6"/><circle cx="2" cy="-20" r="1.6"/><circle cx="16" cy="-17" r="1.6"/></g></g></svg>`,
+
+  window:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wi_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d1a1d"/><stop offset="1" stop-color="#0c0a0c"/></linearGradient><linearGradient id="wi_n" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#23344a"/><stop offset="1" stop-color="#101a26"/></linearGradient><radialGradient id="wi_l" cx=".88" cy=".3" r=".5"><stop offset="0" stop-color="#e6b46a" stop-opacity=".42"/><stop offset="1" stop-color="#e6b46a" stop-opacity="0"/></radialGradient></defs><rect width="800" height="240" fill="url(#wi_s)"/><rect x="120" y="20" width="420" height="200" fill="#0a0f15"/><rect x="132" y="32" width="396" height="176" fill="url(#wi_n)"/><g fill="#f0d488" opacity=".85"><rect x="160" y="150" width="5" height="9"/><rect x="180" y="120" width="5" height="39"/><rect x="210" y="138" width="5" height="21"/><rect x="240" y="100" width="6" height="59"/><rect x="270" y="132" width="5" height="27"/><rect x="300" y="146" width="5" height="13"/><rect x="340" y="112" width="6" height="47"/><rect x="380" y="142" width="5" height="17"/><rect x="420" y="124" width="5" height="35"/><rect x="460" y="150" width="5" height="9"/><rect x="490" y="134" width="5" height="25"/></g><g fill="#fff" opacity=".5"><circle cx="200" cy="70" r="1.4"/><circle cx="320" cy="60" r="1.4"/><circle cx="450" cy="80" r="1.4"/></g><rect x="320" y="32" width="8" height="176" fill="#0a0f15"/><rect x="132" y="116" width="396" height="8" fill="#0a0f15"/><ellipse cx="660" cy="90" rx="150" ry="120" fill="url(#wi_l)"/><g fill="#05060a"><path d="M560 220 q-4-70 16-74 q20 4 16 74 z"/><circle cx="576" cy="130" r="16"/></g></svg>`,
+
+  warehouse:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wh_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#222a2f"/><stop offset="1" stop-color="#0e1215"/></linearGradient></defs><rect width="800" height="240" fill="url(#wh_s)"/><g stroke="#2e383d" stroke-width="6" opacity=".5"><line x1="0" y1="40" x2="800" y2="40"/><line x1="0" y1="60" x2="800" y2="60"/><line x1="0" y1="80" x2="800" y2="80"/></g><rect x="120" y="18" width="200" height="10" rx="5" fill="#cdd6da" opacity=".5"/><rect x="480" y="18" width="200" height="10" rx="5" fill="#cdd6da" opacity=".5"/><rect y="200" width="800" height="40" fill="#0a0d0f"/><g fill="#161d21"><rect x="90" y="120" width="80" height="80"/><rect x="100" y="80" width="60" height="40"/><rect x="180" y="150" width="70" height="50"/><rect x="560" y="110" width="90" height="90"/><rect x="570" y="70" width="70" height="40"/><rect x="660" y="140" width="60" height="60"/></g><g fill="#2a3338"><rect x="98" y="128" width="64" height="3"/><rect x="568" y="118" width="74" height="3"/></g><g fill="#0c1013"><rect x="360" y="150" width="70" height="50"/><rect x="345" y="138" width="16" height="62"/><rect x="430" y="132" width="40" height="10"/><circle cx="375" cy="206" r="9"/><circle cx="415" cy="206" r="9"/></g></svg>`,
+
+  dawn:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="da_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4456"/><stop offset=".55" stop-color="#7d6f6a"/><stop offset="1" stop-color="#d9b283"/></linearGradient></defs><rect width="800" height="240" fill="url(#da_s)"/><circle cx="400" cy="210" r="72" fill="#f0cf94" opacity=".5"/><g fill="#1a2028"><rect x="20" y="120" width="50" height="100"/><rect x="80" y="90" width="40" height="130"/><rect x="130" y="140" width="60" height="80"/><rect x="200" y="100" width="44" height="120"/><rect x="560" y="110" width="50" height="110"/><rect x="620" y="80" width="40" height="140"/><rect x="670" y="130" width="56" height="90"/><rect x="730" y="105" width="40" height="115"/></g><g fill="#11161c"><rect x="280" y="150" width="40" height="70"/><rect x="480" y="140" width="44" height="80"/></g><rect y="218" width="800" height="22" fill="#0c0f13"/><g fill="#05070a"><path d="M392 218 q-2-34 8-35 q10 1 8 35 z"/><circle cx="400" cy="178" r="7"/></g></svg>`,
+
+  default:`<svg viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="df_s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2530"/><stop offset="1" stop-color="#0a0d11"/></linearGradient></defs><rect width="800" height="240" fill="url(#df_s)"/><g fill="#0c131a"><rect x="40" y="140" width="60" height="100"/><rect x="120" y="110" width="50" height="130"/><rect x="600" y="120" width="60" height="120"/><rect x="680" y="150" width="50" height="90"/></g></svg>`,
+};
+
+const SCENE_ART = {
+  c1_age11:"house", c2_age12:"house", c3_age13:"el",
+  c4_age14:"corner", c5_age15:"corner", c6_age16:"gate",
+  m1_age17:"barracks", m2_age18:"barracks", m3_age19:"barracks",
+  k1_age17:"throne", k2_age18:"rain", k3_age19:"redblue",
+  f1_age17:"burger", f2_age18:"window", f3_age19:"window",
+  fin_cop:"badge", fin_quiet:"warehouse", fin_reckon:"dawn", fin_home:"window",
+};
+
+const ENDING_ART = {
+  badge:"badge", steel:"barracks", home_love:"window", way_home:"window",
+  torch:"dawn", drift:"warehouse", wolf:"throne", king:"throne",
+  prison:"gate", death:"el", frank:"corner",
+};
+
+function renderArt(key, cap){
+  const el = $("art");
+  el.style.opacity = 0;
+  el.innerHTML = (ART[key] || ART.default) + `<div class="cap">${cap || ""}</div>`;
+  requestAnimationFrame(()=> el.style.opacity = 1);
+}
+
+/* ======================================================================
+   引擎
+   ====================================================================== */
+let stats, flags, cur, lineIdx, advancing, lastAct;
+const $ = id => document.getElementById(id);
+
+function start(){
+  stats = { ...INITIAL };
+  flags = {};
+  lastAct = null;
+  $("cover").classList.add("hidden");
+  $("ending").classList.add("hidden");
+  $("hud").classList.remove("hidden");
+  $("progress").classList.remove("hidden");
+  $("stage").classList.remove("hidden");
+  buildHud();
+  goto(START);
+}
+
+function buildHud(){
+  const hud = $("hud"); hud.innerHTML = "";
+  for (const k of Object.keys(STAT_META)){
+    const m = STAT_META[k];
+    const el = document.createElement("div");
+    el.className = "stat";
+    el.innerHTML =
+      `<div class="lab"><span><span class="zh">${k}</span> <span class="en">${m.en}</span></span>`
+    + `<span class="num" id="num_${k}">${stats[k]}</span></div>`
+    + `<div class="bar"><i id="bar_${k}" style="background:${m.color}"></i><span class="delta" id="delta_${k}"></span></div>`;
+    hud.appendChild(el);
+  }
+  syncHud(true);
+}
+
+function syncHud(instant){
+  for (const k of Object.keys(STAT_META)){
+    const bar = $("bar_"+k), num = $("num_"+k);
+    if (instant) bar.style.transition = "none";
+    bar.style.width = Math.max(0, Math.min(100, stats[k])) + "%";
+    if (instant) requestAnimationFrame(()=> bar.style.transition = "");
+    num.textContent = Math.round(stats[k]);
+  }
+}
+
+function showDeltas(eff){
+  for (const k in eff){
+    const d = $("delta_"+k); if (!d) continue;
+    const v = eff[k];
+    d.textContent = (v>0?"+":"") + v;
+    d.style.color = v>0 ? STAT_META[k].color : "var(--heat)";
+    d.classList.add("show");
+    setTimeout(()=> d.classList.remove("show"), 1300);
+  }
+}
+
+function goto(id){
+  if (id === "__end__") return endGame();
+  cur = SCENES[id];
+  lineIdx = 0;
+  advancing = true;
+
+  $("age").firstChild.textContent = cur.age;
+  $("ageNote").textContent = cur.ageNote;
+  $("actTag").textContent = cur.act || "";
+  $("era").textContent = cur.era;
+  $("sceneTitle").textContent = "— " + cur.title + " —";
+  renderArt(SCENE_ART[id], cur.era);
+  $("lines").innerHTML = "";
+  $("choices").className = "choices"; $("choices").innerHTML = "";
+  $("freebox").className = "freebox hidden"; $("freebox").innerHTML = "";
+  $("tap").style.display = "none";
+  $("progressBar").style.width = Math.min(100, Math.round((cur.depth/TOTAL_DEPTH)*100)) + "%";
+  window.scrollTo({ top:0, behavior:"smooth" });
+
+  const showContent = ()=>{ advancing = false; $("tap").style.display = "block"; revealNext(); };
+  if (cur.act && cur.act !== lastAct){ lastAct = cur.act; showActBanner(cur.act, showContent); }
+  else showContent();
+}
+
+function showActBanner(act, done){
+  const parts = act.split(" · ");
+  $("bannerNo").textContent = parts[0] || "";
+  $("bannerNm").textContent = parts[1] || "";
+  const b = $("actBanner");
+  b.classList.add("show");
+  setTimeout(()=>{ b.classList.remove("show"); setTimeout(done, 600); }, 1500);
+}
+
+function revealNext(){
+  if (advancing) return;
+  if (lineIdx < cur.lines.length){
+    const p = document.createElement("p");
+    p.className = "ln" + (lineIdx === cur.lines.length-1 ? " dim" : "");
+    p.textContent = cur.lines[lineIdx];
+    $("lines").appendChild(p);
+    requestAnimationFrame(()=> p.classList.add("show"));
+    lineIdx++;
+    if (lineIdx >= cur.lines.length){
+      $("tap").style.display = "none";
+      setTimeout(afterLines, 480);
+    }
+  }
+}
+
+function afterLines(){ cur.freeInput ? renderFreeInput() : renderChoices(); }
+
+function renderFreeInput(){
+  const fb = $("freebox");
+  fb.innerHTML =
+    `<div class="q">${cur.freeInput.q}</div>`
+  + `<textarea id="freeText" placeholder="${cur.freeInput.placeholder}"></textarea>`
+  + `<div class="row"><div class="echo" id="freeEcho"></div><button class="mini" onclick="submitFree()">继续</button></div>`;
+  fb.classList.remove("hidden");
+  requestAnimationFrame(()=> fb.classList.add("show"));
+}
+
+/* 离线轻量「自由输入」:关键词启发式微调属性 + 回写一句反射 */
+function submitFree(){
+  const t = ($("freeText")?.value || "").trim();
+  let eff = {}, echo = "";
+  if (t){
+    const has = arr => arr.some(w => t.includes(w));
+    if (has(["家","菲奥娜","黛比","利普","弟弟","妹妹","保护","孩子","女儿","儿子"])){ eff.牵挂=(eff.牵挂||0)+5; echo="——你想起了家里那几张脸。"; }
+    if (has(["改变","重来","不一样","以后","脊梁","不回头","纪律","坚持","走出去"])){ eff.自律=(eff.自律||0)+5; echo = echo || "——你攥紧了拳头。"; }
+    if (has(["拦","救","别上手","回头","扔了它"])){ eff.良知=(eff.良知||0)+5; echo = echo || "——你想拦住他,像没人拦住过你。"; }
+    if (has(["怕","害怕","配不上","不行","算了","逃","废"])){ eff.自律=(eff.自律||0)-4; echo = echo || "——犹豫像潮水漫过来。"; }
+    if (has(["钱","货","街","上尉","枪","老朋友","赚"])){ eff.街面=(eff.街面||0)+4; eff.良知=(eff.良知||0)-3; echo = echo || "——旧日子的味道又涌上来。"; }
+    if (!echo) echo = "——你把这句话,默默记在了心里。";
+  }
+  if (echo) $("freeEcho").textContent = echo;
+  if (Object.keys(eff).length) applyEffects(eff);
+  const ta = $("freeText"); if (ta) ta.disabled = true;
+  const btn = document.querySelector("#freebox .mini"); if (btn) btn.remove();
+  setTimeout(renderChoices, Object.keys(eff).length ? 900 : 250);
+}
+
+function renderChoices(){
+  const box = $("choices"); box.innerHTML = "";
+  cur.choices.forEach(ch => {
+    const b = document.createElement("div");
+    b.className = "opt";
+    b.innerHTML = ch.text + (ch.hint ? `<span class="hint">${ch.hint}</span>` : "");
+    b.onclick = () => choose(ch);
+    box.appendChild(b);
+  });
+  requestAnimationFrame(()=> box.classList.add("show"));
+}
+
+function applyEffects(eff){
+  if (!eff) return;
+  for (const k in eff) if (k in stats) stats[k] = Math.max(0, Math.min(100, stats[k] + eff[k]));
+  showDeltas(eff);
+  syncHud(false);
+}
+
+function choose(ch){
+  if (advancing) return;
+  advancing = true;
+  applyEffects(ch.effects);
+  if (ch.set) Object.assign(flags, ch.set);
+  $("choices").classList.remove("show");
+  $("freebox").classList.remove("show");
+  setTimeout(()=> goto(ch.next), 720);
+}
+
+function endGame(){
+  const e = judgeEnding(stats, flags);
+  $("hud").classList.add("hidden");
+  $("progress").classList.add("hidden");
+  $("stage").classList.add("hidden");
+
+  const board = Object.keys(STAT_META).map(k =>
+    `<div class="it">${k}<b style="color:${STAT_META[k].color}">${Math.round(stats[k])}</b></div>`).join("");
+
+  $("ending").innerHTML =
+    `<div class="art">${ART[ENDING_ART[e.id]] || ART.default}<div class="cap">${e.en}</div></div>`
+  + `<div class="rarity" style="color:${e.rColor}">${e.rarity}</div>`
+  + `<h2 style="color:${e.rColor}">${e.title}</h2>`
+  + `<div class="en">${e.en}</div>`
+  + `<div class="verse">${e.verse}</div>`
+  + `<div class="scoreboard">${board}</div>`
+  + `<div class="epilogue"><div class="t">写在结局之后</div>${EPILOGUE}</div>`
+  + `<div class="gallery">${GALLERY}</div>`
+  + `<button class="btn" onclick="start()">再选一次七年</button>`
+  + (e.id === "badge"
+      ? `<p class="note" style="color:var(--ink)">你抵达了最难的那条路——卡尔·加拉格真实人生的终点。</p>`
+      : `<p class="note">十一种结局,你刚刚走完一种。</p>`);
+
+  $("ending").classList.remove("hidden");
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+
+/* 点击舞台空白处推进旁白 */
+$("stage").addEventListener("click", e => {
+  if (e.target.closest(".opt") || e.target.closest(".freebox") || e.target.closest(".act-banner")) return;
+  revealNext();
+});
+</script>
+</body>
+</html>

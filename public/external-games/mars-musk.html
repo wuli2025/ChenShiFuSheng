@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>火星序曲 · 马斯克模拟人生</title>
+<style>
+:root{
+  --ink:#2c4661; --ink-soft:#3d5b78; --ink-dim:#5a7088;
+  --paper:#f4f1ea; --paper-2:#ebebe8;
+  --line:#c9c2b4; --cinnabar:#a8443a; --jade:#4f7a5b; --gold:#9a7b34;
+  --text:#27313a; --muted:#6b7480;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+  background:radial-gradient(circle at 50% -10%,#fbfaf6,#e9e4d8 70%);
+  color:var(--text); line-height:1.85; min-height:100%;
+  display:flex; align-items:flex-start; justify-content:center; padding:28px 16px 80px}
+.app{width:100%; max-width:860px}
+
+/* HUD */
+.hud{border:1px solid var(--line); background:rgba(251,250,246,.9); backdrop-filter:blur(4px);
+  border-radius:14px; padding:14px 18px; margin-bottom:18px; position:sticky; top:14px; z-index:9}
+.hud .title{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px}
+.hud .title b{color:var(--ink); font-size:15px; letter-spacing:1px}
+.hud .title span{font-size:12px; color:var(--muted)}
+.bars{display:grid; grid-template-columns:repeat(5,1fr); gap:10px}
+.bar{font-size:11px; color:var(--muted)}
+.bar .lab{display:flex; justify-content:space-between; margin-bottom:4px}
+.bar .lab i{font-style:normal; color:var(--ink-soft); font-weight:600}
+.bar .lab em{font-style:normal; color:var(--ink); font-weight:700}
+.track{height:7px; background:var(--paper-2); border-radius:6px; overflow:hidden}
+.fill{height:100%; width:0; background:var(--ink-soft); border-radius:6px; transition:width .6s cubic-bezier(.4,0,.2,1)}
+.bar.warn .fill{background:var(--cinnabar)}
+.bar.gold .fill{background:var(--gold)}
+.delta{position:fixed; pointer-events:none; font-size:13px; font-weight:700; opacity:0;
+  transition:all 1.1s ease; z-index:30}
+
+/* scene card */
+.scene{border:1px solid var(--line); background:linear-gradient(180deg,#fdfcf9,#f3efe6);
+  border-radius:16px; padding:30px 34px; box-shadow:0 8px 30px rgba(44,70,97,.08); animation:rise .5s ease}
+@keyframes rise{from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none}}
+.chip{display:inline-block; font-size:11px; letter-spacing:3px; color:var(--ink);
+  border:1px solid var(--ink); border-radius:20px; padding:3px 14px; margin-bottom:14px}
+.scene h2{font-size:23px; color:var(--ink); letter-spacing:1px; margin-bottom:6px; line-height:1.4}
+.year{font-size:12px; color:var(--cinnabar); letter-spacing:2px; margin-bottom:16px}
+.body{font-size:16px; color:var(--text); white-space:pre-wrap}
+.body .em{color:var(--ink); font-weight:600}
+
+/* history card */
+.fact{margin-top:20px; border-left:4px solid var(--gold); background:rgba(154,123,52,.07);
+  border-radius:0 10px 10px 0; padding:13px 18px; font-size:13.5px; color:#5e5230}
+.fact b{color:var(--gold); letter-spacing:1px}
+
+/* choices */
+.choices{margin-top:24px; display:flex; flex-direction:column; gap:12px}
+.opt{border:1px solid var(--ink-soft); border-radius:11px; background:#fff; color:var(--ink);
+  padding:14px 18px; font-size:15px; text-align:left; cursor:pointer; transition:.18s; line-height:1.6}
+.opt:hover{background:var(--ink); color:#fff; transform:translateX(4px); box-shadow:0 6px 18px rgba(44,70,97,.18)}
+.opt .k{font-weight:700; margin-right:8px; opacity:.85}
+.opt .hint{display:block; font-size:12px; color:var(--muted); margin-top:4px}
+.opt:hover .hint{color:#cdd6df}
+
+/* free input */
+.freebox{margin-top:18px; border:1px dashed var(--ink-soft); border-radius:11px; padding:14px 16px; background:#fbfaf6}
+.freebox .lab{font-size:12px; color:var(--ink-soft); margin-bottom:8px; letter-spacing:.5px}
+.freebox textarea{width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+  font-family:inherit; font-size:14px; color:var(--text); background:var(--paper); resize:vertical; min-height:52px}
+.freebox .go{margin-top:10px; display:flex; gap:10px; align-items:center}
+.btn{background:var(--ink); color:#fff; border:none; border-radius:9px; padding:10px 22px;
+  font-size:14px; cursor:pointer; letter-spacing:1px; transition:.18s}
+.btn:hover{background:var(--ink-soft)}
+.btn.ghost{background:transparent; color:var(--ink); border:1px solid var(--ink-soft)}
+.btn.ghost:hover{background:var(--paper-2)}
+.freebox .tip{font-size:11px; color:var(--muted)}
+.resp{margin-top:14px; border-left:3px solid var(--jade); background:rgba(79,122,91,.07);
+  padding:11px 16px; border-radius:0 8px 8px 0; font-size:14px; color:#33493a; animation:rise .4s ease}
+
+.cont{margin-top:24px; text-align:center}
+
+/* start / cover */
+.cover{text-align:center; padding:46px 30px}
+.cover .seal{font-size:13px; letter-spacing:6px; color:var(--cinnabar); margin-bottom:18px}
+.cover h1{font-size:40px; color:var(--ink); letter-spacing:3px; margin-bottom:6px}
+.cover .en{font-size:13px; letter-spacing:4px; color:var(--muted); margin-bottom:24px}
+.cover .lead{max-width:560px; margin:0 auto 26px; font-size:15px; color:var(--text)}
+.cover .stats-intro{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:30px}
+.cover .si{font-size:12px; border:1px solid var(--line); border-radius:8px; padding:7px 12px; color:var(--ink-soft); background:#fff}
+.cover .collect{margin-top:22px; font-size:12px; color:var(--muted)}
+
+/* ending */
+.ending h2{font-size:28px}
+.recap{margin-top:18px}
+.recap .line{display:flex; gap:12px; margin:12px 0; font-size:14.5px}
+.recap .line .yr{flex:none; width:88px; color:var(--cinnabar); font-weight:700; font-size:13px}
+.recap .line .tx{color:var(--text)}
+.lesson{margin-top:22px; border:1px solid var(--line); border-radius:12px; padding:18px 22px; background:#fbfaf6}
+.lesson h3{color:var(--ink); font-size:15px; margin-bottom:8px; letter-spacing:1px}
+.badge{display:inline-flex; align-items:center; gap:8px; margin-top:6px; font-size:13px;
+  color:#fff; background:var(--ink); border-radius:20px; padding:6px 16px; letter-spacing:1px}
+.collection{margin-top:26px}
+.collection h3{font-size:14px; color:var(--ink-soft); margin-bottom:10px; text-align:center; letter-spacing:1px}
+.egrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px}
+.ecard{border:1px solid var(--line); border-radius:10px; padding:11px 13px; background:#fff; font-size:12px}
+.ecard.locked{opacity:.5; background:var(--paper-2)}
+.ecard.got{border-color:var(--ink); box-shadow:0 3px 10px rgba(44,70,97,.12)}
+.ecard b{display:block; color:var(--ink); font-size:13px; margin-bottom:3px}
+.ecard span{color:var(--muted)}
+.ecard.locked b{color:var(--muted)}
+.endbtns{margin-top:28px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
+
+.foot{text-align:center; font-size:12px; color:var(--muted); margin-top:26px}
+.prog{font-size:12px; color:var(--muted); text-align:right; margin-top:-8px; margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hud" id="hud" style="display:none">
+    <div class="title"><b id="hudTitle">马斯克模拟人生</b><span id="hudChap">序章</span></div>
+    <div class="bars" id="bars"></div>
+  </div>
+  <div id="stage"></div>
+  <div class="foot">火星序曲 · 马斯克模拟人生 &nbsp;|&nbsp; 一款由「尘世浮生」生成式游戏平台产出的叙事副本 · 纯静态离线可玩</div>
+</div>
+
+<script>
+/* ============================================================
+   状态 / 数值系统  (5 维)
+   探索 = 风险偏好与颠覆野心   稳定 = 务实与风控
+   现金 = 资金弹药            内耗 = 团队/管理裂痕(越高越糟)
+   声望 = 外部信任与公众形象
+============================================================ */
+const STAT_DEF = [
+  {key:'explore', name:'探索倾向', cls:'',     init:0,  max:20},
+  {key:'stable',  name:'稳定倾向', cls:'',     init:0,  max:20},
+  {key:'cash',    name:'现金弹药', cls:'gold', init:10, max:160},
+  {key:'friction',name:'团队内耗', cls:'warn', init:0,  max:100},
+  {key:'rep',     name:'公众声望', cls:'',     init:30, max:100},
+];
+let S = {};
+let FLAGS = {};
+let PATH = [];           // 复盘用：记录关键决策
+function resetState(){
+  S = {}; STAT_DEF.forEach(d=>S[d.key]=d.init);
+  FLAGS = {}; PATH = [];
+}
+
+/* ============================================================
+   剧情节点表
+   type: story(纯剧情) | choice(决策) | gate(结局裁定)
+   text 可为字符串或 (S,FLAGS)=>string
+   choices[].apply: 改数值/置 flag      free: 自由输入配置
+============================================================ */
+const NODES = {
+
+start:{type:'cover'},
+
+c1:{type:'story', chip:'第一章', year:'1995 · 加州 帕罗奥图',
+  title:'斯坦福的十字路口',
+  text:`你站在斯坦福大学材料科学博士班的报到处，手里攥着不到几千美元。
+
+窗外，网景公司 IPO 引爆了整个硅谷的互联网狂热。而在不远处一间月租低廉的办公室里，你和弟弟金巴尔刚刚写完一套城市电子地图软件 Zip2 的底层代码——你们白天写程序，晚上就睡在办公室的地板上，去 YMCA 洗澡。
+
+你必须在象牙塔与数字丛林之间，做出一次即时的切割。`,
+  fact:`真实历史：1995 年马斯克拿到斯坦福读博 offer，但仅入学两天便退学创办 Zip2。早期他确实睡在办公室、到附近健身房洗澡。`,
+  next:'c2'},
+
+c2:{type:'choice', chip:'第一次决策', year:'1996 · Zip2 的第一桶金',
+  title:'资本的温室，还是暴君的控制权？',
+  text:`一家传统媒体巨头向 Zip2 开出第一笔大额风险投资。有了它，你们就能立刻告别地板上的日子——但条件极其残酷：你必须出让控股权，由投资方指派的职业经理人出任 CEO，你被降为技术副总裁。`,
+  choices:[
+    {k:'A', label:'签下协议，让出控股权，换取救命的现金以快速扩张。',
+      hint:'稳定 +2 · 现金 +50 · 内耗 -10 · 声望 +5',
+      apply:s=>{s.stable+=2;s.cash+=50;s.friction-=10;s.rep+=5;}, flag:{zip2:'sell'},
+      path:'1996｜让出 Zip2 控股权，换取现金与扩张'},
+    {k:'B', label:'拒绝让权，靠信用卡套现硬撑，死守绝对技术方向。',
+      hint:'探索 +2 · 现金 -5 · 内耗 +20',
+      apply:s=>{s.explore+=2;s.cash-=5;s.friction+=20;}, flag:{zip2:'keep'},
+      path:'1996｜死守 Zip2 控制权，刷信用卡硬扛'},
+  ],
+  free:{prompt:'或者，写下你自己的融资 / 自筹策略（系统将据关键词动态评估）：',
+        placeholder:'例如：先拉两家投资方竞价压低让权比例，再用过桥贷款保住董事席位…'},
+  next:'c3'},
+
+c3:{type:'story', chip:'第二章', year:'1999—2000 · X.com 与 PayPal',
+  title:'百万富翁的二次梭哈',
+  text:(s,f)=> f.zip2==='keep'
+   ? `1999 年，Zip2 被整体收购，你凭绝对控制权死扛到最后，套现数千万美元！你带着「铁腕」的威名，把几乎全部资本砸进在线金融公司 X.com，随后它与死敌合并为全美最大的在线支付机构 PayPal。
+
+作为最大持股人，你执意在内部强推 Windows 技术架构——但团队对你长期的极权风格早已积怨极深，矛盾濒临临界。`
+   : `1999 年，Zip2 被整体收购。你虽早早向资本妥协、失了部分控制权，却也带着「务实、听劝」的好名声套现千万美元。
+
+你把绝大部分资本投进在线金融公司 X.com，它随后与死敌合并为 PayPal。你试图强推技术架构，但团队对你当年的妥协史与如今的技术铁腕都有微词，内耗在悄悄累积。`,
+  apply:(s,f)=>{ if(f.zip2==='keep'){s.cash=Math.max(s.cash,120);s.friction=Math.max(s.friction,40);s.rep+=8;}
+                 else {s.cash=Math.max(s.cash,80);s.friction=Math.max(s.friction,20);s.rep+=4;} },
+  fact:`真实历史：1999 年 Zip2 被康柏以约 3.07 亿美元收购，马斯克分得约 2200 万美元，旋即创办 X.com，2000 年与 Confinity 合并，即后来的 PayPal。`,
+  next:'c4'},
+
+c4:{type:'choice', chip:'第二次决策', year:'2000 · 蜜月期的政变',
+  title:'度蜜月时，董事会叛变了',
+  text:`因为你高压的管理与底层的技术路线冲突，利益集团内部爆发震荡。趁你乘机飞往欧洲度蜜月的十几个小时，联合创始人与投资方联手发动董事会弹劾，免去你的 CEO 职务，并连夜更换了机房密码。
+
+走下飞机时，你的手机塞满了上百条高管的致歉短信。`,
+  choices:[
+    {k:'A', label:'立刻折返硅谷，在媒体上公开揭露背叛，强行发起股权争夺战。',
+      hint:'探索 +2 · 现金 -20 · 内耗 +40 · 声望 -8',
+      apply:s=>{s.explore+=2;s.cash-=20;s.friction+=40;s.rep-=8;}, flag:{coup:'fight'},
+      path:'2000｜正面硬刚董事会政变，发起股权争夺'},
+    {k:'B', label:'保持克制，接受不任行政职务的调解，保留最大股东身份退居幕后。',
+      hint:'稳定 +2 · 现金 +40 · 内耗 -20 · 声望 +6',
+      apply:s=>{s.stable+=2;s.cash+=40;s.friction-=20;s.rep+=6;}, flag:{coup:'retreat'},
+      path:'2000｜克制退居幕后，保住最大股东席位'},
+  ],
+  next:'c5'},
+
+c5:{type:'story', chip:'第三章', year:'2002—2004 · 套现与下注',
+  title:'把全部筹码推向太空与电动车',
+  text:`2002 年，PayPal 被 eBay 以约 15 亿美元收购，你套现约 1.8 亿美元——人生第一次拥有了「随便花一辈子」的财富。
+
+但你没有去买游艇。你创办了 SpaceX，立志把人类送上火星；又投资了一家叫 Tesla 的小公司，要让世界用电驱动。所有人都说你疯了——把支付赚来的钱，烧进航天和汽车这两个最吞钱的黑洞。`,
+  fact:`真实历史：2002 年 eBay 以 15 亿美元收购 PayPal，马斯克获约 1.65–1.8 亿美元。他随即于 2002 年创办 SpaceX，2004 年领投并加入 Tesla。`,
+  next:'c6'},
+
+c6:{type:'choice', chip:'第三次决策', year:'2008 · 破产边缘的极限卡点',
+  title:'最后的子弹，只够救一家',
+  text:`2008 年，金融海啸全面爆发。SpaceX 的猎鹰 1 号连续三次发射失败，残骸尽数坠入太平洋；Tesla 重资产开模、供应链超支，首款车交付无限期跳票。所有风险资本渠道彻底封锁。
+
+你账面剩下的最后几百万美元，只够救活一家公司，另一家必须破产清算。你独坐在空荡的工厂车间，桌上堆满催款单。`,
+  choices:[
+    {k:'A', label:'全部注入 SpaceX，确保第四次发射，让 Tesla 进入清算。',
+      hint:'探索 +2 · 稳定 +1 · 押注航天',
+      apply:s=>{s.explore+=2;s.stable+=1;}, flag:{y2008:'space'},
+      path:'2008｜全力保 SpaceX，放弃 Tesla'},
+    {k:'B', label:'全部押注 Tesla 供应链抗债，暂停航天，等待新能源奇点。',
+      hint:'稳定 +2 · 现金 +5 · 押注制造',
+      apply:s=>{s.stable+=2;s.cash+=5;}, flag:{y2008:'tesla'},
+      path:'2008｜全力保 Tesla，搁置航天'},
+    {k:'C', label:'个人资产等额拆分，两家同时硬撑，自担 30 天双线崩盘的最高风险。',
+      hint:'探索 +3 · 现金 -15 · 内耗 +15',
+      apply:s=>{s.explore+=3;s.cash-=15;s.friction+=15;}, flag:{y2008:'both'},
+      path:'2008｜拒绝斩仓，拆分资产双线硬撑'},
+  ],
+  free:{prompt:'或者，写下你在 2008 年寒冬里的破局策略：',
+        placeholder:'例如：抵押 SpaceX 早期股权换过桥贷款，同时游说 NASA 提前释放商业补给合同…'},
+  next:'c7'},
+
+c7:{type:'story', chip:'第四章', year:'2008 年圣诞 · 绝处逢生',
+  title:'黎明前最黑的那一夜',
+  text:(s,f)=>{
+    if(f.y2008==='space') return `第四次发射，猎鹰 1 号成功入轨——人类历史上第一枚私人研制的液体燃料火箭抵达太空。几天后，NASA 砸来 16 亿美元商业补给合同，SpaceX 起死回生。
+而 Tesla，没能等到这一天。你在心里给它默哀，但你知道，你押对了通往星辰的那张船票。`;
+    if(f.y2008==='tesla') return `你保住了 Tesla 的供应链。圣诞前夜，最后一轮融资在零点前几分钟敲定，工资发得出来了。Model S 的图纸活了下来。
+而 SpaceX，第四次发射的钱断了供。仰望星空时，你知道火星的梦要往后推很多年——但地球上的电动革命，你守住了。`;
+    return `你拒绝斩仓。圣诞前夜，两条命悬一线的资金链几乎同时绷断又同时接上：第四次猎鹰 1 号惊险入轨，NASA 的 16 亿美元合同压哨砸下；同一周，Tesla 最后一轮融资在零点前几分钟闭合。
+你赌上了一切，换来了人类商业史上最惊险的双线逆转。`;
+  },
+  apply:(s,f)=>{ if(f.y2008==='space'){s.cash+=70;s.rep+=20;FLAGS.tesla_dead=true;}
+                 else if(f.y2008==='tesla'){s.cash+=45;s.rep+=12;FLAGS.space_paused=true;}
+                 else {s.cash+=90;s.rep+=28;s.friction+=5;} },
+  fact:`真实历史：2008 年 9 月 28 日猎鹰 1 号第四次发射首获成功；当年 12 月 NASA 授予 SpaceX 16 亿美元 CRS 合同。同一个圣诞前夜，Tesla 在破产边缘险险完成最后融资——两家公司确曾同月命悬一线。`,
+  next:'c8'},
+
+c8:{type:'choice', chip:'第五章', year:'2013 · Google 的收购要约',
+  title:'一通可以解脱一切的电话',
+  text:(s,f)=> f.tesla_dead
+   ? `没有了 Tesla，你把全部精力压在 SpaceX 上。这一年，老朋友、Google 的拉里·佩奇打来电话：他想把你拉进 Google，用近乎无限的资源支持你的火星计划——代价是 SpaceX 的独立性。`
+   : `Model S 已经上市，却卖得不温不火，Tesla 的现金流又一次见底，离破产只有几周。这时老朋友、Google 的拉里·佩奇打来电话：他愿意以约 60 亿美元收购 Tesla，并承诺保你继续主导产品。一份能让你彻底解脱的合同，就摆在桌上。`,
+  choices:[
+    {k:'A', label:'接受要约，背靠巨头，换取无限资源与稳稳的财富。',
+      hint:'稳定 +3 · 现金 +40 · 探索 -1 · 声望 -4',
+      apply:s=>{s.stable+=3;s.cash+=40;s.explore-=1;s.rep-=4;}, flag:{g2013:'sell'},
+      path:'2013｜接受 Google 要约，背靠巨头'},
+    {k:'B', label:'挂掉电话，发动全员卖车，赌 Model S 的口碑能在几周内逆转。',
+      hint:'探索 +3 · 现金 -10 · 内耗 +10 · 声望 +6',
+      apply:s=>{s.explore+=3;s.cash-=10;s.friction+=10;s.rep+=6;}, flag:{g2013:'fight'},
+      path:'2013｜拒绝 Google，全员卖车豪赌口碑'},
+  ],
+  next:'c9'},
+
+c9:{type:'story', chip:'第六章', year:'2012—2015 · 双线起飞',
+  title:'当火箭学会了回家',
+  text:(s,f)=>{
+    let t = f.g2013==='sell'
+      ? `在巨头的资源加持下，Model S 稳步铺开，成了一台被精心运营的现金奶牛。你换来了从容，却也悄悄交出了一部分孤注一掷的锋芒。\n\n`
+      : `奇迹真的发生了。员工们化身销售，Model S 的口碑像野火般蔓延，订单回流，Tesla 在悬崖边硬生生刹住了车。\n\n`;
+    if(f.space_paused) return t + `而 SpaceX 这边，重启的脚步慢了半拍，可猎鹰 9 号还是一步步逼近那个被所有航天专家嘲笑的目标——让火箭垂直降落、重复使用。`;
+    return t + `2015 年 12 月，猎鹰 9 号的一级火箭在发射后稳稳垂直降落回地面。人类第一次，让入轨火箭学会了回家。发射成本被你一脚踩进了地板。`;
+  },
+  fact:`真实历史：2013 年 Tesla 确曾濒临破产，马斯克与 Google 谈过收购，却靠一场内部「全员卖车」奇迹般自救。2015 年 12 月 21 日，猎鹰 9 号首次成功回收一级火箭，开启可复用时代。`,
+  next:'c10'},
+
+c10:{type:'choice', chip:'第七章', year:'2017—2018 · Model 3 的「生产地狱」',
+  title:'睡在工厂地板上的 CEO',
+  text:`Model 3 要把电动车带进寻常百姓家，可产线良率惨不忍睹，自动化过度，瓶颈处处。资本市场天天唱衰，做空者排成长队。每烧掉一周的钱，公司就离悬崖近一步。
+
+董事会劝你后退一步，找个职业经理人接管运营。你看着停在车间里那条卡死的产线。`,
+  choices:[
+    {k:'A', label:'搬进工厂，睡在产线旁的地板上，亲自把每一个瓶颈砸开。',
+      hint:'探索 +2 · 现金 -10 · 内耗 +20 · 声望 +8',
+      apply:s=>{s.explore+=2;s.cash-=10;s.friction+=20;s.rep+=8;}, flag:{m3:'floor'},
+      path:'2018｜住进工厂，亲手砸穿「生产地狱」'},
+    {k:'B', label:'后退一步，引入专业运营团队，用制度而非个人英雄主义解决问题。',
+      hint:'稳定 +3 · 现金 +5 · 内耗 -15 · 声望 +2',
+      apply:s=>{s.stable+=3;s.cash+=5;s.friction-=15;s.rep+=2;}, flag:{m3:'delegate'},
+      path:'2018｜后退一步，交给专业团队治理产线'},
+  ],
+  free:{prompt:'或者，写下你解决「生产地狱」的工程 / 管理方案：',
+        placeholder:'例如：砍掉过度自动化、回归人机协作，建临时帐篷产线 GA4 抢产能…'},
+  next:'c11'},
+
+c11:{type:'choice', chip:'第八章', year:'2018 · 那条 420 美元的推文',
+  title:'「资金已到位」',
+  text:`深夜，你在推特上敲下一句话：「考虑以每股 420 美元将特斯拉私有化，资金已到位。」股价瞬间暴动。
+
+但监管机构 SEC 找上门来：他们认定这条推文涉嫌误导投资者，要起诉你证券欺诈，并要求你永久退出特斯拉董事长之位。律师说，硬扛下去，你可能连 CEO 都保不住。`,
+  choices:[
+    {k:'A', label:'认为自己没错，正面起诉到底，拒绝任何「封口式」和解。',
+      hint:'探索 +2 · 现金 -15 · 内耗 +15 · 声望 -12',
+      apply:s=>{s.explore+=2;s.cash-=15;s.friction+=15;s.rep-=12;}, flag:{sec:'fight'},
+      path:'2018｜硬刚 SEC，拒绝和解'},
+    {k:'B', label:'接受和解：缴罚款、卸任董事长，保住 CEO 与公司的元气。',
+      hint:'稳定 +2 · 现金 -10 · 内耗 -10 · 声望 +4',
+      apply:s=>{s.stable+=2;s.cash-=10;s.friction-=10;s.rep+=4;}, flag:{sec:'settle'},
+      path:'2018｜与 SEC 和解，卸任董事长保 CEO'},
+  ],
+  next:'c12'},
+
+c12:{type:'story', chip:'第九章', year:'2020—2021 · 加冕',
+  title:'世界首富与星舰',
+  text:(s,f)=>{
+    let base = `2020 年 5 月，载人龙飞船把 NASA 宇航员送上国际空间站——商业航天第一次承担起载人重任。同年，Tesla 市值飙升，一举超过丰田，成为全球最值钱的车企。\n\n`;
+    if(f.sec==='fight') base += `你与监管的缠斗仍未停歇，争议像影子一样跟着你，但市场用真金白银投了票。`;
+    else base += `卸下董事长头衔后，你反而更专注于产品与火箭。资本市场给了你前所未有的信任。`;
+    base += `\n\n2021 年，你成为世界首富。而在德州的星港，那艘要把百万人送上火星的不锈钢巨兽——星舰，正一次次炸毁、又一次次重建。`;
+    return base;
+  },
+  fact:`真实历史：2020 年 5 月载人龙飞船首次送 NASA 宇航员入轨；2020 年 Tesla 市值超越丰田成全球第一车企；2021 年马斯克成为世界首富，星舰进入高频试飞与爆炸—迭代阶段。`,
+  next:'c13'},
+
+c13:{type:'choice', chip:'第十章', year:'2022 · 440 亿美元的冲动',
+  title:'要不要买下那只蓝色小鸟？',
+  text:`你公开报价 440 亿美元收购全球最大的舆论广场——推特。你说这是为了「捍卫言论自由」。但尽调越深，你越发现它估值虚高、机器人横行。律师建议你毁约止损，哪怕赔上巨额分手费。
+
+这笔交易，可能是改变人类公共对话的支点，也可能是吞噬你声望与精力的无底洞。`,
+  choices:[
+    {k:'A', label:'按原价强行完成收购，亲自下场重塑这座舆论广场。',
+      hint:'探索 +3 · 现金 -45 · 内耗 +25 · 声望 -18',
+      apply:s=>{s.explore+=3;s.cash-=45;s.friction+=25;s.rep-=18;}, flag:{tw:'buy'},
+      path:'2022｜440 亿强吞推特，亲自下场'},
+    {k:'B', label:'果断毁约止损，赔掉分手费，把全部精力收回火星与制造。',
+      hint:'稳定 +3 · 现金 -10 · 声望 +6 · 探索 +1',
+      apply:s=>{s.stable+=3;s.cash-=10;s.rep+=6;s.explore+=1;}, flag:{tw:'walk'},
+      path:'2022｜放弃推特，回收精力专注主业'},
+  ],
+  free:{prompt:'或者，写下你处理这笔收购的策略：',
+        placeholder:'例如：压价到 380 亿并保留对赌条款，先剥离广告业务再谈整合…'},
+  next:'c14'},
+
+c14:{type:'choice', chip:'终章', year:'202X · 力量该指向何方',
+  title:'人生最后的方向盘',
+  text:`你已是这颗星球上影响力最大的人之一：火箭、电动车、卫星互联网、脑机接口、人工智能……每一项都在改写人类的未来。
+
+夜深了，你问自己最后一个问题——你的力量，究竟该收束成一束，还是铺满整片天空？`,
+  choices:[
+    {k:'A', label:'孤注一掷，把一切资源压向火星——让人类成为跨行星物种。',
+      hint:'探索 +3 · 声望 +6 · 终极远征',
+      apply:s=>{s.explore+=3;s.rep+=6;}, flag:{vision:'mars'},
+      path:'终章｜把一切压向火星，奔赴跨行星文明'},
+    {k:'B', label:'多线并进：电动车、AI、星链、脑机——构建一个多重实业帝国。',
+      hint:'探索 +1 · 稳定 +2 · 声望 +2 · 帝国扩张',
+      apply:s=>{s.explore+=1;s.stable+=2;s.rep+=2;}, flag:{vision:'empire'},
+      path:'终章｜多线并进，构建多重实业帝国'},
+    {k:'C', label:'功成身退，把企业交给制度与继任者，做一名长青的幕后投资人。',
+      hint:'稳定 +4 · 现金 +30 · 探索 -2',
+      apply:s=>{s.stable+=4;s.cash+=30;s.explore-=2;}, flag:{vision:'retire'},
+      path:'终章｜功成身退，转身为幕后长青投资人'},
+  ],
+  next:'gate'},
+
+gate:{type:'gate'},
+};
+
+/* ============================================================
+   结局定义 + 裁定逻辑
+============================================================ */
+const ENDINGS = {
+  interstellar:{ title:'行星际文明的奠基者', tone:'gold',
+    badge:'★ 隐藏结局 · 完美复刻',
+    lead:'你不是赢了某一局商业博弈——你把整个人类的坐标，往银河系深处挪了一格。',
+    lesson:'真正的远征者，既敢在 2008 年把最后一颗子弹押向太空，也懂得在权力与声望的诱惑前收束锋芒、聚焦一处。极致的风险耐受 + 极致的专注，才铸得出文明级的奇迹。'},
+  empire:{ title:'多重实业帝国 · 钢铁与火', tone:'ink',
+    badge:'☆ 传奇结局',
+    lead:'可回收火箭、电动洪流、卫星星座……你用最高风险的复合杠杆，硬生生堆出了一座横跨天与地的实业帝国。',
+    lesson:'你一路完美复刻了那种罕见的危机耐受度与绝对控制欲——在所有人都劝你断臂求生时拒绝低头。代价是常年的团队震荡，但你换来了改写人类进程的入场券。'},
+  investor:{ title:'硅谷长青的风险投资家', tone:'ink',
+    badge:'☆ 稳健结局',
+    lead:'你是错综资本丛林里最体面的风控大师，手握最多核心独角兽的董事席位。',
+    lesson:'你善用资本妥协完成原始积累，在内耗前主动退后，在危机中精准清算。你割舍了同时颠覆多个产业的可能，却换来了几乎不败的确定性——这是另一种了不起的智慧。'},
+  manufacturer:{ title:'钢铁洪流 · 制造业沙皇', tone:'ink',
+    badge:'☆ 专注结局',
+    lead:'你把火星的梦折叠进抽屉，却让整个地球的公路驶进了电动时代。',
+    lesson:'你在 2008 年选择守住制造而非仰望星空，用工程的偏执与供应链的极致，缔造了人类历史上最强的电动车帝国。聚焦的力量，同样可以改变世界——只是改变的是脚下，而非头顶。'},
+  twitter:{ title:'舆论泥潭 · 声望的滑铁卢', tone:'cinnabar',
+    badge:'☆ 争议结局',
+    lead:'你赢得了一座舆论广场，却在无尽的口水与撕裂中，透支了那个曾叫「钢铁侠」的名字。',
+    lesson:'能力的边界不在于你能不能做成一件事，而在于该不该分心去做。当你把改变文明的精力倒进一口注定喧嚣的深井，最锋利的代价，是声望与专注的双重流失。'},
+  stranded:{ title:'搁浅在沙滩上的理想主义', tone:'cinnabar',
+    badge:'☆ 悲剧结局',
+    lead:'宏大的航天梦与新能源蓝图，最终在黎明前夕，被冰冷的账单和分崩离析的团队彻底撕碎。',
+    lesson:'你低估了硬科技对资本与团队耐受力的残酷压榨。为锁死控制权而留下的管理阴影，在最黑暗的冬夜集中爆发——工程师出走、供应链挤兑、资金链断裂。野心若没有可承重的组织，终成泡影。'},
+  engineer:{ title:'沉默的工程师', tone:'cinnabar',
+    badge:'☆ 平淡结局',
+    lead:'你财富自由、生活安稳，是一个体面的、被时代温柔遗忘的成功者。',
+    lesson:'每一次十字路口你都选择了那条更稳、更轻、更不疼的路。你避开了所有深渊，也因此与所有高峰擦肩而过。安全是一种选择，而非一种命运——只是这一回，你没有把命运攥在自己手里。'},
+};
+
+function adjudicate(){
+  const {explore,stable,cash,friction,rep}=S, f=FLAGS;
+  // 失败优先：内耗过载且激进、现金枯竭 → 搁浅
+  const overreach = (f.y2008==='both'||f.coup==='fight'||f.zip2==='keep');
+  if(friction>=72 && overreach && cash<70) return 'stranded';
+  if(cash<25 && friction>=60) return 'stranded';
+
+  // 隐藏完美结局：极致探索 + 高声望 + 内耗可控 + 现金充足 + 关键激进且终局聚焦火星且放弃推特
+  if(explore>=15 && rep>=68 && friction<55 && cash>=85 &&
+     f.y2008==='both' && f.vision==='mars' && f.tw==='walk') return 'interstellar';
+
+  // 推特泥潭：买了推特且声望崩塌
+  if(f.tw==='buy' && rep<48) return 'twitter';
+
+  // 制造沙皇：2008 保 Tesla 弃航天，且稳健
+  if(f.y2008==='tesla' && stable>=explore) return 'manufacturer';
+
+  // 沉默的工程师：全程求稳、退场、低探索
+  if((f.zip2==='sell'&&f.coup==='retreat'&&(f.vision==='retire'||f.g2013==='sell')) && explore<=4) return 'engineer';
+
+  // 稳健投资家：稳定显著高于探索
+  if(stable>explore+2 || f.vision==='retire') return 'investor';
+
+  // 默认传奇帝国
+  if(explore>=8) return 'empire';
+
+  // 其余兜底
+  return stable>=explore ? 'investor' : 'empire';
+}
+
+/* ============================================================
+   自由输入：离线关键词启发式评估
+============================================================ */
+const KW = [
+  {re:/(裁员|开除|压榨|加班|连夜|铁腕|独裁|强推|硬刚|强行)/, ex:1, fr:12, msg:'你的铁腕换来了执行力，也在团队里埋下裂痕。'},
+  {re:/(融资|过桥|贷款|抵押|借钱|引资|风投|卖股|增发|上市|IPO)/, cash:25, fr:4, msg:'你撬动了外部资本，弹药补给到位，但也让出了一部分主导权。'},
+  {re:/(竞价|压价|对赌|谈判|条款|博弈|拉两家|多方)/, cash:12, ex:1, st:1, rep:3, msg:'精明的条款设计，让你在让步中守住了筹码。'},
+  {re:/(稳健|保守|对冲|分散|止损|断臂|清算|收缩|聚焦|专注)/, st:2, fr:-8, msg:'你选择了克制与聚焦，内耗下降，根基更稳。'},
+  {re:/(激进|梭哈|押注|孤注|all in|allin|赌|双线|硬撑|死扛)/, ex:2, cash:-8, fr:8, rep:4, msg:'你把筹码推到了桌面中央——风险与威名一同上升。'},
+  {re:/(团队|信任|沟通|股权激励|期权|留人|文化|合伙)/, fr:-12, rep:4, st:1, msg:'你修补了人和，团队的裂痕开始愈合。'},
+  {re:/(政府|NASA|补贴|合同|订单|游说|政策|监管)/, cash:18, rep:5, msg:'你争取到了体制内的杠杆，现金与声望双双回血。'},
+  {re:/(创新|工程|技术|自研|研发|迭代|垂直整合|第一性)/, ex:1, rep:5, st:1, msg:'你回到工程的第一性原理，长期竞争力悄然增厚。'},
+  {re:/(营销|声量|公关|形象|品牌|发推|舆论)/, rep:6, fr:3, msg:'你放大了声量，公众形象上扬，但也更易被反噬。'},
+];
+function evalFree(text){
+  let d={ex:0,st:0,cash:0,fr:0,rep:0}, hits=[];
+  KW.forEach(k=>{ if(k.re.test(text)){ d.ex+=k.ex||0; d.st+=k.st||0; d.cash+=k.cash||0; d.fr+=k.fr||0; d.rep+=k.rep||0; hits.push(k.msg);} });
+  // 文字长度与诚意微调
+  const len=text.trim().length;
+  if(len>=30){ d.ex+=1; }
+  let msg = hits.length ? hits.slice(0,2).join(' ') : '你的策略别具一格，系统将其纳入了对局——这一手没有明显倾向，但展现了你的独立思考。';
+  return {d,msg,blank:len<2};
+}
+
+/* ============================================================
+   渲染
+============================================================ */
+const stage=document.getElementById('stage');
+const hud=document.getElementById('hud');
+const barsEl=document.getElementById('bars');
+
+function renderHUD(){
+  hud.style.display='block';
+  barsEl.innerHTML = STAT_DEF.map(d=>{
+    let v=S[d.key], pct=Math.max(0,Math.min(100, (v/d.max)*100));
+    return `<div class="bar ${d.cls}" data-key="${d.key}">
+      <div class="lab"><i>${d.name}</i><em>${Math.round(v)}</em></div>
+      <div class="track"><div class="fill" style="width:${pct}%"></div></div></div>`;
+  }).join('');
+}
+function flashDelta(key, amt){
+  const bar=barsEl.querySelector(`[data-key="${key}"]`);
+  if(!bar||!amt) return;
+  const r=bar.getBoundingClientRect();
+  const el=document.createElement('div');
+  el.className='delta';
+  const good = key==='friction' ? amt<0 : amt>0;
+  el.style.color = good ? 'var(--jade)' : 'var(--cinnabar)';
+  el.textContent=(amt>0?'+':'')+Math.round(amt);
+  el.style.left=(r.left+r.width-18)+'px'; el.style.top=(r.top-2)+'px';
+  document.body.appendChild(el);
+  requestAnimationFrame(()=>{ el.style.opacity='1'; el.style.transform='translateY(-26px)'; });
+  setTimeout(()=>{ el.style.opacity='0'; }, 700);
+  setTimeout(()=>el.remove(),1300);
+}
+function applyStats(deltaObj){
+  // deltaObj: partial of S keys
+  Object.keys(deltaObj).forEach(k=>{
+    const before=S[k]; S[k]=Math.max(0,S[k]+deltaObj[k]);
+    flashDelta(k, S[k]-before);
+  });
+  renderHUD();
+}
+
+let totalNodes = Object.values(NODES).filter(n=>n.type==='story'||n.type==='choice').length;
+let visited = 0;
+
+function go(id){
+  const node=NODES[id];
+  if(node.type==='cover') return renderCover();
+  if(node.type==='gate') return renderEnding();
+  renderHUD();
+  visited++;
+  const chapNo = node.chip||'';
+  document.getElementById('hudChap').textContent = `${chapNo} · ${node.year||''}`;
+  const text = (typeof node.text==='function') ? node.text(S,FLAGS) : node.text;
+
+  // story 进入时立即结算其 apply（被动数值）
+  let pendingPassive = null;
+  if(node.type==='story' && node.apply) pendingPassive = node.apply;
+
+  let html = `<div class="scene">
+    <div class="prog">进度 ${visited} / ${totalNodes+1}</div>
+    <span class="chip">${chapNo}</span>
+    <h2>${node.title}</h2>
+    <div class="year">${node.year||''}</div>
+    <div class="body">${fmt(text)}</div>
+    ${node.fact?`<div class="fact"><b>史实卡</b> &nbsp;${node.fact}</div>`:''}
+    <div id="interact"></div>
+  </div>`;
+  stage.innerHTML=html;
+  window.scrollTo({top:0,behavior:'smooth'});
+
+  if(pendingPassive){ const before={...S}; pendingPassive(S,FLAGS);
+    STAT_DEF.forEach(d=>{ if(S[d.key]!==before[d.key]) flashDelta(d.key,S[d.key]-before[d.key]); });
+    renderHUD();
+  }
+
+  const box=document.getElementById('interact');
+  if(node.type==='story'){
+    box.innerHTML=`<div class="cont"><button class="btn" id="next">继续 →</button></div>`;
+    document.getElementById('next').onclick=()=>go(node.next);
+  } else { // choice
+    let used=false;
+    const choicesHtml = node.choices.map((c,i)=>
+      `<button class="opt" data-i="${i}"><span class="k">${c.k}</span>${c.label}<span class="hint">${c.hint}</span></button>`).join('');
+    let freeHtml='';
+    if(node.free){
+      freeHtml=`<div class="freebox">
+        <div class="lab">${node.free.prompt}</div>
+        <textarea id="freein" placeholder="${node.free.placeholder||''}"></textarea>
+        <div class="go"><button class="btn ghost" id="freego">采纳此策略</button>
+        <span class="tip">离线启发式评估 · 关键词将动态微调数值</span></div>
+        <div id="freeresp"></div></div>`;
+    }
+    box.innerHTML=`<div class="choices">${choicesHtml}</div>${freeHtml}`;
+
+    box.querySelectorAll('.opt').forEach(btn=>{
+      btn.onclick=()=>{
+        if(used) return; used=true;
+        const c=node.choices[+btn.dataset.i];
+        const before={...S};
+        c.apply(S,FLAGS);
+        STAT_DEF.forEach(d=>{ if(S[d.key]!==before[d.key]) flashDelta(d.key,S[d.key]-before[d.key]); });
+        if(c.flag) Object.assign(FLAGS,c.flag);
+        if(c.path) PATH.push(c.path);
+        renderHUD();
+        box.querySelectorAll('.opt').forEach(b=>{b.style.opacity=b===btn?'1':'.4'; b.disabled=true;
+          if(b===btn){b.style.background='var(--ink)';b.style.color='#fff';}});
+        const fg=document.getElementById('freego'); if(fg) fg.disabled=true;
+        const fi=document.getElementById('freein'); if(fi) fi.disabled=true;
+        setTimeout(()=>{
+          const cont=document.createElement('div'); cont.className='cont';
+          cont.innerHTML=`<button class="btn" id="next">继续 →</button>`;
+          box.appendChild(cont);
+          document.getElementById('next').onclick=()=>go(node.next);
+          document.getElementById('next').scrollIntoView({behavior:'smooth',block:'center'});
+        },650);
+      };
+    });
+
+    if(node.free){
+      document.getElementById('freego').onclick=()=>{
+        const fi=document.getElementById('freein'); const txt=fi.value;
+        const {d,msg,blank}=evalFree(txt);
+        const resp=document.getElementById('freeresp');
+        if(blank){ resp.innerHTML=`<div class="resp">先写下你的策略，系统才能评估哦。</div>`; return; }
+        // 映射到 S 键
+        const dd={explore:d.ex,stable:d.st,cash:d.cash,friction:d.fr,rep:d.rep};
+        applyStats(dd);
+        PATH.push('自定义策略｜'+txt.trim().slice(0,40)+(txt.trim().length>40?'…':''));
+        resp.innerHTML=`<div class="resp"><b>系统评估：</b>${msg}</div>`;
+        fi.disabled=true; document.getElementById('freego').disabled=true;
+      };
+    }
+  }
+}
+
+function fmt(t){ return t.replace(/SpaceX|Tesla|PayPal|Zip2|NASA|Model S|Model 3|Google|SEC/g,'<span class="em">$&</span>'); }
+
+/* 封面 */
+function renderCover(){
+  hud.style.display='none';
+  const got = JSON.parse(localStorage.getItem('musk_endings')||'[]');
+  stage.innerHTML=`<div class="scene cover">
+    <div class="seal">尘 世 浮 生 · 生成式副本</div>
+    <h1>火星序曲</h1>
+    <div class="en">THE MARS PRELUDE — 马斯克模拟人生</div>
+    <p class="lead">1995 年，你从斯坦福退学的那一刻起，将亲手走过马斯克式的每一个十字路口：让权与控制、政变与隐忍、破产边缘的终极梭哈、生产地狱、那条 420 美元的推文、440 亿美元的冲动……每一次选择，都会改写你的探索、稳定、现金、内耗与声望，并最终把你推向 <b>7 种命运之一</b>。</p>
+    <div class="stats-intro">
+      <span class="si">探索倾向 · 风险与野心</span>
+      <span class="si">稳定倾向 · 务实与风控</span>
+      <span class="si">现金弹药</span>
+      <span class="si">团队内耗</span>
+      <span class="si">公众声望</span>
+    </div>
+    <div class="cont"><button class="btn" id="begin">开始这一生 →</button></div>
+    <div class="collect">已解锁结局：${got.length} / 7 ${got.length?'　('+got.map(g=>ENDINGS[g]?.title).filter(Boolean).join(' · ')+')':''}</div>
+  </div>`;
+  document.getElementById('begin').onclick=()=>{ resetState(); visited=0; go('c1'); };
+}
+
+/* 结局 */
+function renderEnding(){
+  const id=adjudicate();
+  const e=ENDINGS[id];
+  // 存档
+  let got=JSON.parse(localStorage.getItem('musk_endings')||'[]');
+  if(!got.includes(id)){ got.push(id); localStorage.setItem('musk_endings',JSON.stringify(got)); }
+
+  const order=['interstellar','empire','manufacturer','investor','twitter','stranded','engineer'];
+  const collection = order.map(k=>{
+    const en=ENDINGS[k], unlocked=got.includes(k), cur=k===id;
+    return `<div class="ecard ${unlocked?'got':'locked'}">
+      <b>${unlocked?en.title:'？？？'}</b>
+      <span>${unlocked?en.badge:'尚未解锁'}${cur?' · 本局获得':''}</span></div>`;
+  }).join('');
+
+  const recap = PATH.map(p=>{
+    const [yr,...rest]=p.split('｜');
+    return `<div class="line"><span class="yr">${yr}</span><span class="tx">${rest.join('｜')}</span></div>`;
+  }).join('');
+
+  document.getElementById('hudChap').textContent='复盘';
+  renderHUD();
+  stage.innerHTML=`<div class="scene ending">
+    <span class="chip">最终结局</span>
+    <h2 style="color:${e.tone==='gold'?'var(--gold)':e.tone==='cinnabar'?'var(--cinnabar)':'var(--ink)'}">${e.title}</h2>
+    <div class="badge" style="background:${e.tone==='gold'?'var(--gold)':e.tone==='cinnabar'?'var(--cinnabar)':'var(--ink)'}">${e.badge}</div>
+    <div class="body" style="margin-top:18px">${e.lead}</div>
+
+    <div class="recap"><h3 style="color:var(--ink-soft);font-size:14px;margin-bottom:6px;letter-spacing:1px">你的人生复盘</h3>${recap}</div>
+
+    <div class="lesson"><h3>这一局教会你的事</h3>${e.lesson}</div>
+
+    <div class="lesson" style="background:rgba(154,123,52,.06);border-color:rgba(154,123,52,.4)">
+      <h3 style="color:var(--gold)">终局数值结算</h3>
+      探索 ${Math.round(S.explore)} · 稳定 ${Math.round(S.stable)} · 现金 ${Math.round(S.cash)} · 内耗 ${Math.round(S.friction)} · 声望 ${Math.round(S.rep)}
+    </div>
+
+    <div class="collection"><h3>结局图鉴 · 已解锁 ${got.length} / 7</h3>
+      <div class="egrid">${collection}</div></div>
+
+    <div class="endbtns">
+      <button class="btn" id="again">再活一次 →</button>
+      <button class="btn ghost" id="home">返回封面</button>
+    </div>
+    <p class="foot" style="margin-top:18px">教育说明：本副本基于马斯克 1995—2023 的真实历程改编，每章「史实卡」均为真实事件；不同选择对应了「极限风险耐受」「务实风控」「专注 vs 多元」等真实可迁移的决策范式。愿你在自己的十字路口，也能认出哪条路通向星辰。</p>
+  </div>`;
+  window.scrollTo({top:0,behavior:'smooth'});
+  document.getElementById('again').onclick=()=>{ resetState(); visited=0; go('c1'); };
+  document.getElementById('home').onclick=()=>renderCover();
+}
+
+/* 启动 */
+resetState();
+renderCover();
+</script>
+</body>
+</html>
