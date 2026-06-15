@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { platform } from "./platform";
-import { getGame as getBuiltinDef } from "./registry";
 import GameSidebar from "./GameSidebar.vue";
 import GameLobby from "./GameLobby.vue";
-import GameStage from "./GameStage.vue";
-import GamePlayer from "./GamePlayer.vue";
+import GameView from "./GameView.vue";
 import GameCreate from "./GameCreate.vue";
 import GameLibrary from "./GameLibrary.vue";
+import GameGallery from "./GameGallery.vue";
 import GameSettings from "./GameSettings.vue";
 import GameExternal from "./GameExternal.vue";
 import MeteorSky from "./MeteorSky.vue";
@@ -24,11 +23,11 @@ import MeteorSky from "./MeteorSky.vue";
         <GameLobby v-if="platform.screen === 'lobby'" key="lobby" />
         <GameCreate v-else-if="platform.screen === 'create'" key="create" />
         <GameLibrary v-else-if="platform.screen === 'library'" key="library" />
+        <GameGallery v-else-if="platform.screen === 'gallery'" key="gallery" />
         <GameSettings v-else-if="platform.screen === 'settings'" key="settings" />
         <GameExternal v-else-if="platform.screen === 'external'" key="external" />
-        <!-- 体验：注册表里的内置游戏(尘世浮生/钢铁之路…)用引擎播放器，生成的游戏用通用播放器 -->
-        <GameStage v-else-if="getBuiltinDef(platform.gameId)" key="stage" />
-        <GamePlayer v-else key="player" />
+        <!-- 体验：内置精修剧本与 AI 生成剧本统一走沉浸式播放器 GameView -->
+        <GameView v-else key="view" />
       </Transition>
     </main>
   </div>

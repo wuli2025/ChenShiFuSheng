@@ -70,7 +70,8 @@ const SCHEMA_HINT = `严格只输出一个 JSON 对象（不要任何解释、�
       "id":"s1",
       "title":"— 一 · 场景名 —",
       "bgPrompt":"给绘图模型的中文画面描述",
-      "lines":["旁白第一句","旁白第二句"],
+      "mood":"calm",
+      "lines":["旁白第一句","旁白第二句","「人物名」：一句对白(可选,用「」标出说话人)"],
       "options":[
         {"text":"选项A文案","hint":"才情 +,家境 −","effects":{"才情":10,"家境":-6},"next":"s2"},
         {"text":"选项B文案","hint":"风骨 +","effects":{"风骨":8},"next":"s3"}
@@ -82,7 +83,7 @@ const SCHEMA_HINT = `严格只输出一个 JSON 对象（不要任何解释、�
     {"id":"e1","title":"结局名","verse":"一句收束的话","weight":"风骨*2 + 心境"}
   ]
 }
-要求：scenes 5-6 个，构成一棵有分岔的剧情树，至少一处分岔通向不同后续；末端场景的 option.next 用 "__end__"；endings 给 3-5 个，weight 是只含属性 key 和 + - * / 数字的表达式；所有属性 key 必须在 stats 里出现；中文叙事，文风沉静。`;
+要求：scenes 6-8 个，构成一棵有分岔、可重玩的剧情树，至少两处分岔通向真正不同的后续(不要都汇回同一条线)；每个场景给 3-5 句 lines，叙事与对白交错——对白用「人物名」：标出说话人，更有临场感；每个场景标 mood(calm 平静 / tense 紧张 / sorrow 悲怆 / hope 希望 / grand 壮阔)以驱动配乐；末端场景的 option.next 用 "__end__"；endings 给 4-6 个、差异鲜明，weight 是只含属性 key 和 + - * / 数字的表达式；所有属性 key 必须在 stats 里出现；中文叙事，文风沉静、有画面感。`;
 
 function buildCreatePrompt(req: CreateReq): string {
   const opts = [
@@ -198,6 +199,7 @@ export async function generateGame(
             }))
           : [],
         freeInput: s.freeInput !== false,
+        mood: s.mood ? String(s.mood) : undefined,
       };
     }
   }
@@ -241,7 +243,8 @@ export async function continueScene(
   game: GeneratedGame,
   current: GenScene,
   statsMap: Record<string, number>,
-  action: string
+  action: string,
+  onProgress?: ProgressFn
 ): Promise<GenScene> {
   const prompt = `这是叙事游戏《${game.title}》。玩家当前所在场景：
 标题：${current.title}
@@ -254,7 +257,8 @@ export async function continueScene(
   "id":"新场景id",
   "title":"— 场景名 —",
   "bgPrompt":"画面描述",
-  "lines":["旁白1","旁白2"],
+  "mood":"calm | tense | sorrow | hope | grand",
+  "lines":["旁白1","旁白2","「人物」：对白(可选)"],
   "options":[{"text":"选项","hint":"","effects":{"属性key":数值},"next":"__end__"}],
   "freeInput": true,
   "effects": {"属性key": 数值}
@@ -263,7 +267,7 @@ export async function continueScene(
     statsMap
   ).join("、")}。`;
 
-  const text = await runChat(prompt, false);
+  const text = await runChat(prompt, false, onProgress);
   const raw = extractJson(text);
   const id = String(raw.id || newId("free"));
   const scene: GenScene = {
@@ -280,6 +284,7 @@ export async function continueScene(
         }))
       : [{ text: "继续", next: "__end__" }],
     freeInput: raw.freeInput !== false,
+    mood: raw.mood ? String(raw.mood) : undefined,
   };
   // 顶层 effects 挂到场景上，供调用方应用
   (scene as any).__effects =

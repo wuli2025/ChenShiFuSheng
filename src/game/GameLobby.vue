@@ -4,6 +4,7 @@ import { GAMES } from "./games";
 import { EXTERNAL_GAMES } from "./externalGames";
 import { enterGame, enterExternal, goCreate } from "./platform";
 import { listGames, removeGame } from "./gamesStore";
+import { hasRun, unlockedCount } from "./saves";
 import { toast } from "../composables/useToast";
 
 // 大厅卡片 = 外部HTML游戏 + 内置游戏 + 本地生成的游戏
@@ -106,6 +107,10 @@ function onRemove(id: string, e: Event) {
           <span v-if="!c.playable" class="lock">未启</span>
           <span v-if="c.kind === 'generated'" class="gen-badge">生成</span>
           <span v-else-if="c.kind === 'external'" class="gen-badge ext">外部</span>
+          <span v-if="c.kind !== 'external' && hasRun(c.id)" class="run-badge">续</span>
+          <span v-if="c.kind !== 'external' && unlockedCount(c.id)" class="end-badge">
+            阅 {{ unlockedCount(c.id) }} 结局
+          </span>
           <span
             v-if="c.kind === 'generated'"
             class="del"
@@ -226,6 +231,29 @@ function onRemove(id: string, e: Event) {
 .tag { font-size: 11px; letter-spacing: 0.18em; color: var(--accent, #c98b6b); margin-bottom: 10px; }
 .name { font-family: "Songti SC", "SimSun", serif; font-size: 22px; letter-spacing: 0.12em; color: #f0e9da; }
 .desc { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #8a8f98; }
+.run-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #e7ddc9;
+  background: rgba(201, 139, 107, 0.85);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.end-badge {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #cf8466;
+  border: 1px solid rgba(201, 139, 107, 0.5);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
 .enter { padding: 0 20px 18px; font-size: 13px; letter-spacing: 0.1em; color: var(--accent, #c98b6b); }
 .lobby-foot { margin-top: 56px; text-align: center; font-size: 11px; letter-spacing: 0.3em; color: #494e57; }
 </style>

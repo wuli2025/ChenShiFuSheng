@@ -24,7 +24,15 @@ export interface Scene {
   scene: string; // 章节题:— 一 · 斯坦福的岔路 —
   art?: string; // 背景配图 key(交给 def.art 解析为 SVG)
   lines: string[]; // 旁白逐句
-  choices: Choice[];
+  // 抉择节点:有 choices,读完旁白后弹选项。
+  choices?: Choice[];
+  // 纯叙事节点(一「幕」):无 choices,用 next 自动续接到下一幕。
+  // 节奏:连推几个纯叙事幕(约 100–150 字)后,再给一个真正分流的抉择。
+  next?: string;
+  // 进入本幕时自动发生的「命运/偶发」事件:被动改属性,无需玩家选。
+  event?: { effects?: Stats; note?: string };
+  // 史笔批注:进入本幕时显示的一行小字,如「史载:乌台诗案,几置之死地。」
+  footnote?: string;
 }
 
 export interface Ending {

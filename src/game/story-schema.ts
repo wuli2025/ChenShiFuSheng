@@ -24,6 +24,7 @@ export interface GenScene {
   lines: string[]; // 旁白逐句
   options: GenOption[]; // 2-3 个分支选项
   freeInput?: boolean; // 是否允许对话框自由输入
+  mood?: string; // 情绪:calm/tense/sorrow/hope/grand —— 驱动音景
 }
 
 export interface GenEnding {

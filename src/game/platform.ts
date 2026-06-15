@@ -8,6 +8,7 @@ export type Screen =
   | "play"
   | "external"
   | "library"
+  | "gallery"
   | "settings";
 
 export interface PlatformState {
@@ -47,6 +48,9 @@ export function goCreate() {
 }
 export function goLibrary() {
   platform.screen = "library";
+}
+export function goGallery() {
+  platform.screen = "gallery";
 }
 export function goSettings() {
   platform.screen = "settings";

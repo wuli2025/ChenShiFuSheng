@@ -11,9 +11,17 @@ import {
   type ImageCfg,
 } from "./gameSettings";
 import { provider, type ProviderView } from "../tauri";
+import { audioCfg, engine } from "./audio";
+import { prefs, resetPrefs } from "./prefs";
 import { toast } from "../composables/useToast";
 
 const img = ref<ImageCfg>(getImageCfg());
+
+function previewSound() {
+  engine.unlock();
+  engine.startBgm();
+  engine.sfx("choice");
+}
 
 const providers = ref<ProviderView[]>([]);
 const currentId = ref("");
@@ -64,10 +72,95 @@ onMounted(loadProviders);
 <template>
   <div class="set-root">
     <header class="head">
-      <div class="title">设置 · 模型 API</div>
+      <div class="title">设置</div>
     </header>
 
     <div class="wrap">
+      <!-- 音景 -->
+      <section class="card">
+        <div class="card-head">
+          <strong>音景</strong>
+          <span class="hint">程序化合成的水墨氛围，随剧情情绪变调</span>
+        </div>
+        <div class="f">
+          <label>背景氛围</label>
+          <label class="sw"><input type="checkbox" v-model="audioCfg.bgm" /> 缓慢演化的五声和声 + 风声底噪</label>
+        </div>
+        <div class="f">
+          <label>音效</label>
+          <label class="sw"><input type="checkbox" v-model="audioCfg.sfx" /> 翻页 / 抉择 / 结局的拨弦音</label>
+        </div>
+        <div class="f">
+          <label>总音量</label>
+          <input type="range" min="0" max="1" step="0.05" v-model.number="audioCfg.master" class="range" />
+          <span class="vol">{{ Math.round(audioCfg.master * 100) }}%</span>
+        </div>
+        <div class="f">
+          <label>背景音量</label>
+          <input type="range" min="0" max="1" step="0.05" v-model.number="audioCfg.bgmVol" class="range" />
+          <span class="vol">{{ Math.round(audioCfg.bgmVol * 100) }}%</span>
+        </div>
+        <div class="f">
+          <label>音效音量</label>
+          <input type="range" min="0" max="1" step="0.05" v-model.number="audioCfg.sfxVol" class="range" />
+          <span class="vol">{{ Math.round(audioCfg.sfxVol * 100) }}%</span>
+        </div>
+        <div class="card-foot"><button class="save" @click="previewSound">试听</button></div>
+      </section>
+
+      <!-- 文本 · 阅读 -->
+      <section class="card">
+        <div class="card-head">
+          <strong>文本 · 阅读</strong>
+          <span class="hint">对标成熟视觉小说的阅读手感</span>
+        </div>
+        <div class="f">
+          <label>打字机</label>
+          <label class="sw"><input type="checkbox" v-model="prefs.typewriter" /> 旁白逐字浮现（关闭则整句直显）</label>
+        </div>
+        <div class="f">
+          <label>文字速度</label>
+          <input type="range" min="6" max="80" step="2" v-model.number="prefs.textSpeed" class="range invert" />
+          <span class="vol">{{ prefs.textSpeed <= 16 ? "快" : prefs.textSpeed >= 50 ? "慢" : "中" }}</span>
+        </div>
+        <div class="f">
+          <label>自动间隔</label>
+          <input type="range" min="400" max="3000" step="100" v-model.number="prefs.autoSpeed" class="range" />
+          <span class="vol">{{ (prefs.autoSpeed / 1000).toFixed(1) }}s</span>
+        </div>
+        <div class="f">
+          <label>正文字号</label>
+          <input type="range" min="0.85" max="1.4" step="0.05" v-model.number="prefs.fontScale" class="range" />
+          <span class="vol">{{ Math.round(prefs.fontScale * 100) }}%</span>
+        </div>
+      </section>
+
+      <!-- 画面 -->
+      <section class="card">
+        <div class="card-head">
+          <strong>画面</strong>
+          <span class="hint">氛围层，可按设备性能取舍</span>
+        </div>
+        <div class="f">
+          <label>转场时长</label>
+          <input type="range" min="0" max="700" step="50" v-model.number="prefs.transition" class="range" />
+          <span class="vol">{{ prefs.transition }}ms</span>
+        </div>
+        <div class="f">
+          <label>四角压暗</label>
+          <label class="sw"><input type="checkbox" v-model="prefs.vignette" /> 暗角聚焦视线</label>
+        </div>
+        <div class="f">
+          <label>水墨浮尘</label>
+          <label class="sw"><input type="checkbox" v-model="prefs.particles" /> 空气中缓缓上浮的尘点</label>
+        </div>
+        <div class="f">
+          <label>缓动镜头</label>
+          <label class="sw"><input type="checkbox" v-model="prefs.kenBurns" /> 背景缓慢推拉，画面有呼吸感</label>
+        </div>
+        <div class="card-foot"><button class="save" @click="resetPrefs()">恢复默认</button></div>
+      </section>
+
       <!-- 生图模型 -->
       <section class="card">
         <div class="card-head">
@@ -172,4 +265,6 @@ onMounted(loadProviders);
 .cur { margin-left: auto; font-size: 11px; color: #cf8466; }
 .note { font-size: 13px; line-height: 1.9; color: #9aa1ab; }
 .note b { color: #cdb89a; }
+.range { flex: 1; accent-color: #c98b6b; cursor: pointer; }
+.vol { width: 44px; text-align: right; color: #cdb89a; font-size: 12px; }
 </style>
