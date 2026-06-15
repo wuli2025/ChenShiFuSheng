@@ -89,6 +89,14 @@ body,
   overflow: hidden;
 }
 
+/* 尘世浮生游戏外壳:整窗墨黑,与透明标题栏(macOS Overlay)的顶部叠加区融为一体,
+   避免开窗瞬间露出浅色 body。游戏平台始终深色,故无条件压黑。 */
+html,
+body,
+#app {
+  background-color: #07080a;
+}
+
 ::selection {
   background: var(--primary-soft);
   color: var(--primary-deep);

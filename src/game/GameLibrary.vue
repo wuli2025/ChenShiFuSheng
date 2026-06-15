@@ -86,7 +86,7 @@ onMounted(load);
   color: #d8d2c4;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-.head { display: flex; align-items: center; padding: 24px 36px 16px; }
+.head { display: flex; align-items: center; padding: 44px 36px 16px; }
 .title { flex: 1; text-align: center; font-family: "Songti SC", serif; font-size: 24px; letter-spacing: 0.4em; color: #ece3d0; }
 .clear { border: 1px solid rgba(255,255,255,0.14); background: transparent; color: #9aa1ab; padding: 6px 16px; border-radius: 999px; cursor: pointer; font-size: 12px; }
 .clear:hover { color: #cf8466; border-color: #b5654a; }

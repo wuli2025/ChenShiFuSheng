@@ -138,7 +138,7 @@ onMounted(loadProviders);
   overflow-y: auto;
   background: radial-gradient(120% 80% at 50% -10%, #1a1d22, #0b0c0e 60%);
   color: #d8d2c4;
-  padding: 32px 40px 48px;
+  padding: 44px 40px 48px;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .head { display: flex; align-items: center; max-width: 760px; margin: 0 auto 26px; }

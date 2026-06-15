@@ -98,12 +98,14 @@ const items = computed<NavItem[]>(() => [
   width: 88px;
   height: 100vh;
   flex: none;
-  background: linear-gradient(180deg, #14171c, #0c0d10);
+  /* 半透明墨黑:让流星在侧栏后也隐约流过,与主区同底 */
+  background: linear-gradient(180deg, rgba(20, 23, 28, 0.82), rgba(7, 8, 10, 0.88));
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0 16px;
+  /* 顶部留出 44px 避让拖拽条与 macOS 红绿灯 */
+  padding: 44px 0 16px;
   position: relative;
   z-index: 40;
   overflow: hidden;
@@ -112,7 +114,7 @@ const items = computed<NavItem[]>(() => [
 /* 收起态：缩成一条窄边，只留印章作展开把手 */
 .rail.collapsed {
   width: 30px;
-  padding: 16px 0 16px;
+  padding: 44px 0 16px;
 }
 .rail.collapsed .nav,
 .rail.collapsed .foot {

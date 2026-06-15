@@ -131,7 +131,8 @@ function onRemove(id: string, e: Event) {
 .lobby {
   height: 100vh;
   overflow-y: auto;
-  background: radial-gradient(120% 80% at 50% -10%, #1a1d22, #0b0c0e 60%);
+  /* 透明:让平台底的流星星空透上来,大厅与窗口融为一体的墨黑 */
+  background: transparent;
   color: #d8d2c4;
   padding: 56px 56px 40px;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;

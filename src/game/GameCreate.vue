@@ -287,7 +287,7 @@ const { isOver } = useFileDrop({
   flex-direction: column;
   background: radial-gradient(120% 80% at 50% -10%, #1a1d22, #0b0c0e 60%);
   color: #d8d2c4;
-  padding: 26px 0 18px;
+  padding: 44px 0 18px;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .create-root.over {
