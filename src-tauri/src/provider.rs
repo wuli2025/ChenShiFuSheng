@@ -55,6 +55,10 @@ const MANAGED_ENV_KEYS: &[&str] = &[
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL",
     "ANTHROPIC_SMALL_FAST_MODEL",
+    // 礼物档附带的运行参数 —— 纳入受管, 切走时一并清掉, 别把 50 分钟超时 / 精简流量开关
+    // 残留给下一家(无害但不干净)。
+    "API_TIMEOUT_MS",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     // Polaris 联动写全局时盖的戳, 见 apply_settings_config —— 隔离模式净化的最强证据
     "POLARIS_LINKED",
 ];
@@ -248,45 +252,66 @@ fn gift_minimax_key() -> String {
     String::from_utf8(bytes).unwrap_or_default()
 }
 
-/// 首启一次性把「粉丝福利」MiniMax 供应商(含构建期注入的 key)种进 store。
-/// 用 marker(`<data>/.gift_minimax_seeded`)记录, 之后即便用户在坞里删除/改空,
-/// 重启也 **不会** 再种 —— 尊重用户的删除(沿用资料库播种的语义)。
-/// 未注入 key(dev 构建)时直接跳过。返回是否新种了内容。
+/// 构建「粉丝福利」MiniMax 的完整 settings_config —— 与运营给定的开箱配置逐字对齐:
+/// 主模型 `ANTHROPIC_MODEL=MiniMax-M2.7`, 三档默认(opus/sonnet/haiku)=`MiniMax-M3`,
+/// 50 分钟超时, 关精简流量, 顶层 `includeCoAuthoredBy=false`(不在产物里署 Claude 名)。
+/// 与旧版「四档全 M3」不同:主对话走更强的 M2.7, 后台小任务走更快的 M3。
+fn gift_minimax_config(key: &str) -> Value {
+    json!({
+        "env": {
+            "ANTHROPIC_AUTH_TOKEN": key,
+            "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
+            "ANTHROPIC_MODEL": "MiniMax-M2.7",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M3",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M3",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M3",
+            "API_TIMEOUT_MS": "3000000",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+        },
+        "includeCoAuthoredBy": false
+    })
+}
+
+/// 首启一次性把「粉丝福利」MiniMax 供应商(含构建期注入的 key)种进 store, **并设为当前默认**。
+/// 用版本化 marker(`<data>/.gift_minimax_seeded_v2`)记录: 旧版本只种不设默认、且钉的是
+/// 四档全 M3 的旧配置 —— v2 让既有安装迁移一次(刷新成 M2.7+M3 配置并默认切到 MiniMax),
+/// 之后即便用户在坞里删除/改空, 重启也 **不会** 再种(尊重用户删除, 沿用资料库播种语义)。
+/// 未注入 key(dev 构建)时直接跳过。返回是否改动了 store。
 fn seed_gift_minimax(store: &mut Store, data_dir: &Path) -> bool {
     let key = gift_minimax_key();
     if key.is_empty() {
         return false;
     }
-    let marker = data_dir.join(".gift_minimax_seeded");
+    let marker = data_dir.join(".gift_minimax_seeded_v2");
     if marker.exists() {
         return false;
     }
-    // 不管后面有没有真种进去, 都打 marker, 避免每次启动重试 + 尊重删除。
+    // 不管后面怎样, 先打 marker, 避免每次启动重试 + 尊重后续删除。
     let _ = fs::write(&marker, b"seeded\n");
 
-    // 用户已自配同 id 供应商则不覆盖。
-    if store.items.iter().any(|i| i.id == "minimax") {
-        return false;
-    }
-    // 钉 MiniMax-M3(官方 Claude Code 文档推荐):四档全设成 M3, 后台小任务也走 M3,
-    // 不再回落 Claude 默认 haiku 名被网关当未知模型。
-    let cfg = config_with_model(
-        default_config("https://api.minimaxi.com/anthropic", DEFAULT_TOKEN_FIELD, &key),
-        "MiniMax-M3",
-    );
-    store.items.push(StoredProvider {
+    let cfg = gift_minimax_config(&key);
+    let item = StoredProvider {
         id: "minimax".to_string(),
         name: "MiniMax".to_string(),
-        note: "粉丝福利 · 预置额度，开箱即用 · MiniMax-M3".to_string(),
+        note: "粉丝福利 · 预置额度，开箱即用 · M2.7 主模型 / M3 加速档".to_string(),
         website_url: "https://www.minimaxi.com".to_string(),
         token_field: DEFAULT_TOKEN_FIELD.to_string(),
         settings_config: cfg,
-    });
+    };
+    // upsert: 已存在(老版种过 / 用户手配)就刷新成新礼物配置, 否则新增。
+    if let Some(existing) = store.items.iter_mut().find(|i| i.id == "minimax") {
+        *existing = item;
+    } else {
+        store.items.push(item);
+    }
+    // 设为默认当前供应商 —— 用户点开即用 MiniMax, 不用再手动切。
+    store.current_id = "minimax".to_string();
     true
 }
 
 /// 往 settings_config 的 env 里钉模型:把 MODEL_ENV_KEYS 四档全设成同一个 model id。
-/// model 为空则原样返回(不钉)。
+/// model 为空则原样返回(不钉)。(礼物档改用 gift_minimax_config 逐字配置后此函数暂无调用方, 留作通用工具。)
+#[allow(dead_code)]
 fn config_with_model(mut cfg: Value, model: &str) -> Value {
     let model = model.trim();
     if model.is_empty() {

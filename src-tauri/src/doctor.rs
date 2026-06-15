@@ -311,10 +311,43 @@ fn npm_claude_native_exe(prefix: &std::path::Path) -> PathBuf {
         .join("claude.exe")
 }
 
-/// 已知的 claude 可执行文件候选位置。原生 `.exe` 优先 (能直接 spawn),
+/// 应用**自带打包**的 claude 可执行文件 (零安装正路): tauri.windows.conf.json 把
+/// `resources/claude-bin/claude.exe` 映射到安装目录下的 `bin/claude.exe` (与 voice DLL 同级落点)。
+/// 在 exe 同级 / `bin/` / `vendor/` 及 macOS `.app/Contents/Resources` 里找, 找到即返回。
+/// 让用户**什么都不用装**就能对话 —— 与 forge.rs::bundled_exe 同一套发现逻辑。
+pub fn bundled_claude_exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?.to_path_buf();
+    let mut roots = vec![dir.clone(), dir.join("bin"), dir.join("vendor")];
+    // macOS: exe 在 .app/Contents/MacOS/ → 资源在 ../Resources(及其 bin/)。
+    if let Some(contents) = dir.parent() {
+        roots.push(contents.join("Resources"));
+        roots.push(contents.join("Resources").join("bin"));
+    }
+    let names: &[&str] = if cfg!(windows) {
+        &["claude.exe"]
+    } else {
+        &["claude"]
+    };
+    for r in roots {
+        for n in names {
+            let p = r.join(n);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+/// 已知的 claude 可执行文件候选位置。应用自带打包优先 (零安装), 其次原生 `.exe` (能直接 spawn),
 /// npm 的 `claude.cmd` shim 仅作探测 / PATH 兜底。
 fn claude_candidates() -> Vec<PathBuf> {
     let mut v = Vec::new();
+    // 应用自带打包的 claude (零安装) —— 最优先, 保证开箱即用。
+    if let Some(p) = bundled_claude_exe() {
+        v.push(p);
+    }
     if let Some(h) = home_dir() {
         // 官方原生脚本: ~/.local/bin/claude(.exe)
         v.push(h.join(".local").join("bin").join("claude.exe"));
@@ -404,6 +437,10 @@ fn resolve_claude_exe_uncached() -> Option<PathBuf> {
             .map(|e| e.eq_ignore_ascii_case("exe"))
             .unwrap_or(false)
     };
+    // 0. 应用自带打包的 claude —— 最优先: 用户什么都不用装就能用, 且版本由我们随包锁定。
+    if let Some(p) = bundled_claude_exe() {
+        return Some(p);
+    }
     let hits = which_all("claude"); // 已过滤为「存在的」路径
     // 1. PATH 命中里的 .exe (原生装常见)
     if let Some(p) = hits.iter().find(|p| is_exe(p)) {
