@@ -11,6 +11,12 @@ export interface ImagePreset {
 // 预置生图模型示范（点选自动填端点，用户只补 Key）
 export const IMAGE_PRESETS: ImagePreset[] = [
   {
+    id: "stepfun",
+    name: "阶跃星辰 StepFun",
+    endpoint: "https://api.stepfun.com/v1/images/generations",
+    model: "step-1x-medium",
+  },
+  {
     id: "seedream",
     name: "即梦 / Seedream",
     endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
@@ -53,12 +59,13 @@ export interface ImageCfg {
 
 const KEY = "polaris.game.image.v1";
 
+// 默认接入阶跃星辰:开箱即用,生成式游戏直接走 StepFun 出图。
 const DEFAULT_CFG: ImageCfg = {
-  preset: "seedream",
-  endpoint: IMAGE_PRESETS[0].endpoint,
-  apiKey: "",
-  model: IMAGE_PRESETS[0].model,
-  enabled: false,
+  preset: "stepfun",
+  endpoint: "https://api.stepfun.com/v1/images/generations",
+  apiKey: "1AJREc19rwAzI9EItOIFAPB2UZZjjrGrAepmho62ikiWoLXyr5ntKsVzh4JyrQfFC",
+  model: "step-1x-medium",
+  enabled: true,
 };
 
 export function getImageCfg(): ImageCfg {

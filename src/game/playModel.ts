@@ -9,6 +9,7 @@ import {
   type GeneratedGame,
   type GenScene,
 } from "./story-schema";
+import { artFor, voiceFor, videoFor } from "./art-manifest";
 
 const MOODS = new Set<Mood>(["calm", "tense", "sorrow", "hope", "grand"]);
 export function normMood(m: string | undefined): Mood | undefined {
@@ -42,7 +43,10 @@ export interface PlayScene {
   ageNote?: string;
   era?: string;
   bg?: string; // CSS background(生成游戏的画面)
-  artHtml?: string; // SVG 配图(内置游戏)
+  artHtml?: string; // SVG 配图(内置游戏,无真实配图时回退)
+  img?: string; // 阶跃星辰生成的真实场景配图(优先于 artHtml)
+  video?: string; // 万相图生视频:会动的水墨(优先于 img)
+  voiceSrc?: string; // 阶跃星辰旁白配音 mp3 路径
   mood?: Mood; // 情绪 → 驱动音景
   // 纯叙事幕:无 choices,用 next 自动续接到下一幕(节奏:多转几幕再给一次抉择)
   next?: string;
@@ -100,6 +104,9 @@ export function fromDef(def: GameDef): PlayModel {
       ageNote: s.ageNote,
       era: s.era,
       artHtml: def.art ? def.art(s.art) : undefined,
+      img: artFor(def.id, id),
+      video: videoFor(def.id, id),
+      voiceSrc: voiceFor(def.id, id),
       mood: inferMood(`${s.scene} ${s.era} ${(s.lines ?? []).join("")}`),
       next: s.next,
       event: s.event ? { effects: s.event.effects, note: s.event.note } : undefined,

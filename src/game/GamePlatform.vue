@@ -8,14 +8,16 @@ import GameLibrary from "./GameLibrary.vue";
 import GameGallery from "./GameGallery.vue";
 import GameSettings from "./GameSettings.vue";
 import GameExternal from "./GameExternal.vue";
-import MeteorSky from "./MeteorSky.vue";
+import WarmAura from "./WarmAura.vue";
 </script>
 
 <template>
   <div class="platform">
-    <!-- 星空流星层:坐在墨黑底之上、所有界面之下 -->
-    <MeteorSky class="sky" />
-    <!-- 顶部黑色拖拽条:与下方内容同色融为一体;macOS 红绿灯浮于此条 -->
+    <!-- 呼吸式暖光晕:慢慢明灭的烛火氛围,坐在最底层 -->
+    <div class="glow" aria-hidden="true"></div>
+    <!-- 暖色氛围动效层:上浮萤火/光尘,居于侧栏/内容之下 -->
+    <WarmAura class="sky" />
+    <!-- 顶部拖拽条:与下方内容同色融为一体;macOS 红绿灯浮于此条 -->
     <div class="titlebar" data-tauri-drag-region></div>
     <GameSidebar />
     <main class="content">
@@ -37,16 +39,33 @@ import MeteorSky from "./MeteorSky.vue";
 .platform {
   display: flex;
   height: 100vh;
-  /* 墨黑底 + 顶部一抹幽蓝晕,作为流星星空的底色 */
-  background: radial-gradient(130% 90% at 50% -15%, #131720, #07080a 62%);
+  /* 暖色烛光底:深暖褐 + 顶部一抹琥珀辉光,作为氛围动效的底色 */
+  background:
+    radial-gradient(120% 85% at 50% -10%, #3a2618 0%, #241710 38%, #150d09 72%, #0f0907 100%);
   overflow: hidden;
   position: relative;
 }
-/* 流星星空层:铺满平台,居于侧栏/内容之下 */
+/* 呼吸式暖光晕:多枚暖色辉光缓缓明灭,铺满最底层 */
+.glow {
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 38% at 22% 18%, rgba(224, 150, 88, 0.16), transparent 70%),
+    radial-gradient(46% 42% at 82% 30%, rgba(201, 120, 79, 0.14), transparent 72%),
+    radial-gradient(50% 48% at 50% 108%, rgba(232, 174, 104, 0.12), transparent 70%);
+  animation: breathe 14s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+/* 暖色氛围动效层:铺满平台,居于侧栏/内容之下 */
 .sky {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
 }
 /* 顶部拖拽条:透明叠在墨黑底上,高 32 —— 与内容同底色,上下融为一体 */
 .titlebar {

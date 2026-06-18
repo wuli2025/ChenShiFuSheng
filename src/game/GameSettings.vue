@@ -91,6 +91,15 @@ onMounted(loadProviders);
           <label class="sw"><input type="checkbox" v-model="audioCfg.sfx" /> 翻页 / 抉择 / 结局的拨弦音</label>
         </div>
         <div class="f">
+          <label>旁白配音</label>
+          <label class="sw"><input type="checkbox" v-model="audioCfg.narration" /> 阶跃星辰 TTS 逐场景朗读旁白</label>
+        </div>
+        <div class="f">
+          <label>旁白音量</label>
+          <input type="range" min="0" max="1" step="0.05" v-model.number="audioCfg.narrationVol" class="range" />
+          <span class="vol">{{ Math.round(audioCfg.narrationVol * 100) }}%</span>
+        </div>
+        <div class="f">
           <label>总音量</label>
           <input type="range" min="0" max="1" step="0.05" v-model.number="audioCfg.master" class="range" />
           <span class="vol">{{ Math.round(audioCfg.master * 100) }}%</span>

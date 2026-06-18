@@ -9,9 +9,11 @@ import { reactive, watch } from "vue";
 export interface AudioCfg {
   bgm: boolean; // 背景氛围开关
   sfx: boolean; // 音效开关
+  narration: boolean; // 旁白配音开关(阶跃星辰 TTS,逐场景朗读)
   master: number; // 总音量 0..1
   bgmVol: number; // 背景音量 0..1
   sfxVol: number; // 音效音量 0..1
+  narrationVol: number; // 旁白音量 0..1
 }
 
 export type Mood = "calm" | "tense" | "sorrow" | "hope" | "grand";
@@ -44,15 +46,17 @@ function loadCfg(): AudioCfg {
       return {
         bgm: o.bgm !== false,
         sfx: o.sfx !== false,
+        narration: o.narration !== false,
         master: num(o.master, 0.7),
         bgmVol: num(o.bgmVol, 0.6),
         sfxVol: num(o.sfxVol, 0.8),
+        narrationVol: num(o.narrationVol, 0.9),
       };
     }
   } catch {
     /* ignore */
   }
-  return { bgm: true, sfx: true, master: 0.7, bgmVol: 0.6, sfxVol: 0.8 };
+  return { bgm: true, sfx: true, narration: true, master: 0.7, bgmVol: 0.6, sfxVol: 0.8, narrationVol: 0.9 };
 }
 function num(v: any, d: number): number {
   const n = Number(v);

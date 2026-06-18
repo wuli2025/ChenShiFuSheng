@@ -106,6 +106,7 @@ const sceneBg = computed(
     scene.value?.bg ||
     "radial-gradient(120% 90% at 80% 0%, rgba(44,70,97,.4), transparent 60%), radial-gradient(100% 80% at 0% 100%, rgba(90,55,50,.32), transparent 55%), #14161a"
 );
+const hasPhoto = computed(() => !!(scene.value?.img || scene.value?.video));
 const unlocked = ref<string[]>(model ? listUnlocked(model.id) : []);
 const totalEndings = computed(() => model?.raw?.endings.length || 0);
 const slots = ref<Record<string, SlotMeta>>(model ? listSlots(model.id) : {});
@@ -216,6 +217,32 @@ function applyMood() {
   const m = scenes[sceneId.value]?.mood;
   if (m) engine.setMood(m);
 }
+
+// —— 旁白配音(阶跃星辰 TTS,逐场景朗读) ——
+let narrAudio: HTMLAudioElement | null = null;
+function stopNarration() {
+  if (narrAudio) {
+    try {
+      narrAudio.pause();
+    } catch {
+      /* ignore */
+    }
+    narrAudio = null;
+  }
+}
+function playNarration(src?: string) {
+  stopNarration();
+  if (!src || !audioCfg.narration) return;
+  try {
+    const a = new Audio(src);
+    a.volume = Math.max(0, Math.min(1, audioCfg.master * audioCfg.narrationVol));
+    a.play().catch(() => {});
+    narrAudio = a;
+  } catch {
+    /* ignore */
+  }
+}
+
 function enterScene(id: string) {
   sceneId.value = id;
   resetReveal();
@@ -223,6 +250,7 @@ function enterScene(id: string) {
   engine.setScene(sceneCount);
   applyMood();
   const s = scenes[id];
+  playNarration(s?.voiceSrc);
   if (s) {
     logPush({ kind: "chapter", text: s.chapter });
     // 进场结算被动「命运」事件 + 收集史笔批注
@@ -386,6 +414,7 @@ function restart() {
 
 function leave() {
   engine.sfx("back");
+  stopNarration();
   persist();
   backToLobby();
 }
@@ -394,6 +423,11 @@ function toggleSound() {
   const on = audioCfg.bgm || audioCfg.sfx;
   audioCfg.bgm = !on;
   audioCfg.sfx = !on;
+}
+function toggleNarration() {
+  audioCfg.narration = !audioCfg.narration;
+  if (audioCfg.narration) playNarration(scene.value?.voiceSrc);
+  else stopNarration();
 }
 
 // —— 自动播放(自调度,读取 prefs.autoSpeed) ——
@@ -463,6 +497,8 @@ function firstGesture() {
   engine.unlock();
   if (audioCfg.bgm) engine.startBgm();
   applyMood();
+  // 首个手势解锁后,补播当前场景旁白(自动播放策略下首场可能被拦)
+  if (audioCfg.narration && narrAudio == null) playNarration(scene.value?.voiceSrc);
 }
 
 onMounted(() => {
@@ -484,6 +520,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   if (typeTimer) clearInterval(typeTimer);
   if (autoTimer) clearTimeout(autoTimer);
+  stopNarration();
   persist();
 });
 </script>
@@ -497,16 +534,36 @@ onBeforeUnmount(() => {
       <button class="ctl" :class="{ on: auto }" title="自动播放 (A)" @click="auto = !auto">自动</button>
       <button class="ctl" title="存读 (S)" @click="showSaves = true">存读</button>
       <button class="ctl" title="回看 (H)" @click="showLog = true">回看</button>
-      <button class="ctl" :class="{ on: audioCfg.bgm || audioCfg.sfx }" title="声音" @click="toggleSound">
+      <button class="ctl" :class="{ on: audioCfg.bgm || audioCfg.sfx }" title="氛围音乐" @click="toggleSound">
         {{ audioCfg.bgm || audioCfg.sfx ? "音" : "默" }}
+      </button>
+      <button class="ctl" :class="{ on: audioCfg.narration }" title="旁白配音" @click="toggleNarration">
+        {{ audioCfg.narration ? "白" : "哑" }}
       </button>
       <button class="ctl" title="重新开始" @click="restart">重来</button>
     </div>
 
     <div class="frame ink">
-      <!-- 画面层:配图(内置 SVG) 或 背景图(生成) -->
+      <!-- 画面层:会动的水墨(万相 i2v) › 真实配图(阶跃星辰生图) › 内置 SVG › 生成背景 -->
+      <video
+        v-if="scene && scene.video"
+        class="stage-video"
+        :key="'vid-' + sceneId"
+        :src="scene.video"
+        autoplay
+        loop
+        muted
+        playsinline
+      ></video>
       <div
-        v-if="scene && scene.artHtml"
+        v-else-if="scene && scene.img"
+        class="stage-photo"
+        :class="{ kb: prefs.kenBurns }"
+        :key="'img-' + sceneId"
+        :style="{ backgroundImage: `url(${scene.img})` }"
+      ></div>
+      <div
+        v-else-if="scene && scene.artHtml"
         class="stage-art"
         :class="{ kb: prefs.kenBurns }"
         :key="sceneId"
@@ -519,7 +576,7 @@ onBeforeUnmount(() => {
         :key="'bg-' + sceneId"
         :style="{ background: sceneBg }"
       ></div>
-      <div class="art-veil"></div>
+      <div class="art-veil" :class="{ photo: hasPhoto }"></div>
       <div class="vignette" v-if="prefs.vignette"></div>
       <InkParticles v-if="prefs.particles" />
 
@@ -772,6 +829,40 @@ onBeforeUnmount(() => {
   opacity: 0.62;
   animation: artFade 1.2s ease;
 }
+/* 会动的水墨层(万相 i2v):铺满、循环、静音自动播放 */
+.stage-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.96;
+  animation: photoFade 1.4s ease;
+}
+/* 真实配图层:图片为主,接近满显,缓动镜头 */
+.stage-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.96;
+  animation: photoFade 1.4s ease;
+}
+.stage-photo.kb {
+  animation: photoFade 1.4s ease, kenburns 30s ease-in-out 1.4s infinite alternate;
+  transform-origin: 60% 40%;
+}
+@keyframes photoFade {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 0.96;
+  }
+}
 .stage-art :deep(svg) {
   width: 100%;
   height: 100%;
@@ -804,6 +895,17 @@ onBeforeUnmount(() => {
   z-index: 1;
   background: linear-gradient(100deg, rgba(8, 12, 20, 0.92) 18%, rgba(8, 12, 20, 0.5) 56%, rgba(8, 12, 20, 0.34) 100%),
     linear-gradient(0deg, rgba(8, 12, 20, 0.7), transparent 40%);
+}
+/* 有真实配图时:图片为主,只在文字区(左侧+底部)压暗保证可读,右上留白展示画面 */
+.art-veil.photo {
+  background: linear-gradient(
+      100deg,
+      rgba(8, 11, 17, 0.82) 0%,
+      rgba(8, 11, 17, 0.55) 34%,
+      rgba(8, 11, 17, 0.12) 62%,
+      rgba(8, 11, 17, 0) 100%
+    ),
+    linear-gradient(0deg, rgba(6, 9, 14, 0.85) 2%, rgba(6, 9, 14, 0.2) 30%, transparent 50%);
 }
 .vignette {
   position: absolute;

@@ -1,8 +1,6 @@
 // 游戏注册表 —— 大厅与播放器据此查找 GameDef。新增游戏只需在此登记。
 import type { GameDef } from "./engine";
 import { chenshiGame } from "./games/chenshi";
-import { muskGame } from "./games/musk";
-import { simaqianGame } from "./games/simaqian";
 import { zhugeliangGame } from "./games/zhugeliang";
 import { sushiGame } from "./games/sushi";
 import { wuzetianGame } from "./games/wuzetian";
@@ -15,8 +13,6 @@ import { zhuyuanzhangGame } from "./games/zhuyuanzhang";
 
 export const GAME_DEFS: Record<string, GameDef> = {
   [chenshiGame.id]: chenshiGame,
-  [muskGame.id]: muskGame,
-  [simaqianGame.id]: simaqianGame,
   [zhugeliangGame.id]: zhugeliangGame,
   [sushiGame.id]: sushiGame,
   [wuzetianGame.id]: wuzetianGame,

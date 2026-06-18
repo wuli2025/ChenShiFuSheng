@@ -136,9 +136,9 @@ function onRemove(id: string, e: Event) {
 .lobby {
   height: 100vh;
   overflow-y: auto;
-  /* 透明:让平台底的流星星空透上来,大厅与窗口融为一体的墨黑 */
+  /* 透明:让平台底的暖色氛围动效透上来,大厅与窗口融为一体的暖底 */
   background: transparent;
-  color: #d8d2c4;
+  color: #e6d8c2;
   padding: 56px 56px 40px;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
@@ -147,10 +147,11 @@ function onRemove(id: string, e: Event) {
   font-family: "Songti SC", "SimSun", serif;
   font-size: 40px;
   letter-spacing: 0.5em;
-  color: #ece3d0;
+  color: #f4e6cd;
   text-indent: 0.5em;
+  text-shadow: 0 2px 30px rgba(224, 150, 88, 0.35);
 }
-.sub { margin-top: 14px; font-size: 13px; letter-spacing: 0.2em; color: #6c727c; }
+.sub { margin-top: 14px; font-size: 13px; letter-spacing: 0.2em; color: #9c8366; }
 .nav { margin-top: 22px; display: flex; gap: 12px; justify-content: center; }
 .nav button {
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -174,27 +175,34 @@ function onRemove(id: string, e: Event) {
 .card {
   appearance: none;
   text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.015);
-  border-radius: 14px;
+  /* 无硬边框:极淡暖膜浮于氛围之上,靠柔光与背景相融 */
+  border: 1px solid transparent;
+  background: linear-gradient(165deg, rgba(58, 38, 24, 0.34), rgba(28, 18, 12, 0.18));
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   padding: 0;
   color: inherit;
-  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
 }
 .card:not(.disabled):hover {
   transform: translateY(-6px);
-  border-color: var(--accent, #c98b6b);
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(165deg, rgba(72, 47, 29, 0.5), rgba(34, 22, 14, 0.3));
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.45),
+    0 0 50px -8px var(--accent, #c98b6b);
 }
-.card.disabled { cursor: not-allowed; opacity: 0.55; }
-.card.create { border-style: dashed; border-color: rgba(201, 139, 107, 0.4); }
+.card.disabled { cursor: not-allowed; opacity: 0.5; }
+.card.create {
+  background: linear-gradient(165deg, rgba(201, 139, 107, 0.14), rgba(40, 26, 16, 0.18));
+  box-shadow: inset 0 0 0 1px rgba(224, 150, 88, 0.22), 0 8px 30px rgba(0, 0, 0, 0.28);
+}
 .cover { position: relative; aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; }
-.create-cover { background: linear-gradient(160deg, #1a2530, #11161c); }
-.plus { font-size: 54px; color: #c98b6b; }
+.create-cover { background: radial-gradient(120% 120% at 50% 30%, #3a2615, #1b110a); }
+.plus { font-size: 54px; color: #e0a96d; text-shadow: 0 0 24px rgba(224, 150, 88, 0.5); }
 .glyph {
   font-family: "Songti SC", "SimSun", serif;
   font-size: 72px;
@@ -228,9 +236,9 @@ function onRemove(id: string, e: Event) {
 }
 .del:hover { background: rgba(180, 60, 50, 0.6); color: #fff; }
 .meta { padding: 18px 20px 16px; flex: 1; }
-.tag { font-size: 11px; letter-spacing: 0.18em; color: var(--accent, #c98b6b); margin-bottom: 10px; }
-.name { font-family: "Songti SC", "SimSun", serif; font-size: 22px; letter-spacing: 0.12em; color: #f0e9da; }
-.desc { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #8a8f98; }
+.tag { font-size: 11px; letter-spacing: 0.18em; color: var(--accent, #e0a96d); margin-bottom: 10px; }
+.name { font-family: "Songti SC", "SimSun", serif; font-size: 22px; letter-spacing: 0.12em; color: #f4e9d6; }
+.desc { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #a3917a; }
 .run-badge {
   position: absolute;
   bottom: 12px;
@@ -254,6 +262,6 @@ function onRemove(id: string, e: Event) {
   padding: 2px 9px;
   border-radius: 999px;
 }
-.enter { padding: 0 20px 18px; font-size: 13px; letter-spacing: 0.1em; color: var(--accent, #c98b6b); }
-.lobby-foot { margin-top: 56px; text-align: center; font-size: 11px; letter-spacing: 0.3em; color: #494e57; }
+.enter { padding: 0 20px 18px; font-size: 13px; letter-spacing: 0.1em; color: var(--accent, #e0a96d); }
+.lobby-foot { margin-top: 56px; text-align: center; font-size: 11px; letter-spacing: 0.3em; color: #6b5740; }
 </style>

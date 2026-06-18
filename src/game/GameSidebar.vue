@@ -106,9 +106,14 @@ const items = computed<NavItem[]>(() => [
   width: 88px;
   height: 100vh;
   flex: none;
-  /* 半透明墨黑:让流星在侧栏后也隐约流过,与主区同底 */
-  background: linear-gradient(180deg, rgba(20, 23, 28, 0.82), rgba(7, 8, 10, 0.88));
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  /* 无边框:从左侧暖褐极淡地渐隐到透明,与主区暖底无缝相融,萤火隐隐透过 */
+  background: linear-gradient(
+    90deg,
+    rgba(36, 23, 16, 0.55) 0%,
+    rgba(30, 19, 13, 0.32) 60%,
+    rgba(30, 19, 13, 0) 100%
+  );
+  border-right: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -200,12 +205,12 @@ const items = computed<NavItem[]>(() => [
   position: relative;
 }
 .navbtn:hover {
-  color: #cfc8ba;
-  background: rgba(255, 255, 255, 0.04);
+  color: #f0e2cf;
+  background: rgba(224, 150, 88, 0.08);
 }
 .navbtn.on {
-  color: #ece3d0;
-  background: rgba(44, 70, 97, 0.4);
+  color: #f6ecd8;
+  background: rgba(201, 120, 79, 0.18);
 }
 .navbtn.on::before {
   content: "";
