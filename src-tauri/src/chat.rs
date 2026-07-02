@@ -397,8 +397,15 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
         },
     );
 
-    // 默认走宿主机执行（沙箱可选，但默认关闭）；动态编排时放行 Task 子代理
-    let mut child = spawn_on_host(&final_prompt, perm, &art_dir, args.dynamic_workflow)?;
+    // 引擎分流: 默认 codex CLI(吃 ChatGPT 订阅), 可在设置里切回 claude CLI。
+    // 两条路线共用同一套 prompt 组装、stdin 喂入、stderr 透传、看门狗、产物快照, 只是
+    // 「拉起哪个进程 + 怎么解析它的流式输出」不同(见 spawn_codex_on_host / handle_codex_event)。
+    let is_codex = crate::engine::current() == "codex";
+    let mut child = if is_codex {
+        spawn_codex_on_host(&final_prompt, perm, &art_dir, args.dynamic_workflow)?
+    } else {
+        spawn_on_host(&final_prompt, perm, &art_dir, args.dynamic_workflow)?
+    };
 
     // prompt 经 stdin 喂给 claude (而非命令行参数): 大 prompt 不会撞 Windows 命令行
     // 长度上限, 也不会因 prompt 以 `-` 开头被当成 flag。spawn 后立刻写 + drop, claude 读到 EOF 就开始处理。
@@ -462,13 +469,19 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
         });
     }
 
-    // stderr 读线程: 任何 stderr 行都 emit 为 error 事件; 累积起来给 wait 用
+    // stderr 读线程: 累积起来给 wait 用。
+    // - claude: 每行 stderr 都 emit 为 error 事件(claude 的 stderr 行确实是错误);
+    // - codex: stderr 是 tracing 日志(INFO/WARN/ERROR, 含「某工具退出码 1」这类**非致命**记录),
+    //   不当致命错误外发 —— 否则一条 codex 内部工具失败日志就会把整轮生成 reject 掉。
+    //   codex 的权威成败只看「进程退出码」(下方 child.wait)与 JSONL 的 error/turn.failed
+    //   (handle_codex_event)。真失败时 stderr 缓冲仍会附在退出码错误里, 不丢诊断信息。
     let app_err = app.clone();
     let req_err = req_id.clone();
     let conv_id_err = conv_id_opt.clone();
     let stderr_buf = Arc::new(Mutex::new(String::new()));
     let stderr_buf_clone = stderr_buf.clone();
     let act_err = last_activity.clone();
+    let emit_stderr_errors = !is_codex;
     std::thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
@@ -485,16 +498,18 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
                     buf.push('\n');
                 }
             }
-            emit_event(
-                &app_err,
-                ChatStreamEvent {
-                    req_id: req_err.clone(),
-                    kind: "error".into(),
-                    text: Some(format!("[stderr] {}", line)),
-                    tool: None,
-                    conversation_id: conv_id_err.clone(),
-                },
-            );
+            if emit_stderr_errors {
+                emit_event(
+                    &app_err,
+                    ChatStreamEvent {
+                        req_id: req_err.clone(),
+                        kind: "error".into(),
+                        text: Some(format!("[stderr] {}", line)),
+                        tool: None,
+                        conversation_id: conv_id_err.clone(),
+                    },
+                );
+            }
         }
     });
 
@@ -530,6 +545,8 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
         // 超限后改写入可丢弃的 scrap (实时 delta 仍照常 emit, 前端实时可见), 不再增长落库缓冲。
         let mut scrap = String::new();
         let mut capped = false;
+        // codex 引擎: 按 item.id 记已 emit 的 agent_message 文本字节长度, 增量发 delta(防重复)。
+        let mut codex_emitted: HashMap<String, usize> = HashMap::new();
         for line in reader.lines() {
             let Ok(line) = line else { continue };
             if line.trim().is_empty() {
@@ -538,6 +555,15 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
             *act_out.lock() = std::time::Instant::now(); // 刷新活动: 流式产出即视为推进, 防误杀
             let target = if capped { &mut scrap } else { &mut assistant_text };
             match serde_json::from_str::<Value>(&line) {
+                Ok(v) if is_codex => handle_codex_event(
+                    &app_out,
+                    &req_out,
+                    conv_id_thread.as_deref(),
+                    &v,
+                    target,
+                    &mut artifacts,
+                    &mut codex_emitted,
+                ),
                 Ok(v) => handle_stream_event(
                     &app_out,
                     &req_out,
@@ -577,8 +603,10 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
                 Ok(status) => {
                     if !status.success() {
                         let stderr_txt = stderr_buf_for_done.lock().clone();
+                        let engine_label = if is_codex { "codex" } else { "claude" };
                         Some(format!(
-                            "claude 进程异常退出 (exit code={:?})\n--- stderr ---\n{}",
+                            "{} 进程异常退出 (exit code={:?})\n--- stderr ---\n{}",
+                            engine_label,
                             status.code(),
                             if stderr_txt.is_empty() {
                                 "(stderr 为空)".to_string()
@@ -590,7 +618,7 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
                         None
                     }
                 }
-                Err(e) => Some(format!("等待 claude 进程失败: {}", e)),
+                Err(e) => Some(format!("等待 CLI 进程失败: {}", e)),
             }
         } else {
             None
@@ -873,44 +901,167 @@ fn emit_event(app: &AppHandle, ev: ChatStreamEvent) {
     let _ = app.emit("chat:stream", ev);
 }
 
-// Docker-in-Docker 沙箱仅桌面构建可用 (依赖 polaris_sandbox crate)；
-// server(容器内)本期降级，不编译此路径。
-#[cfg(feature = "desktop")]
-#[allow(dead_code)]
-fn spawn_in_sandbox(prompt: &str, perm: &str) -> Result<Child, String> {
-    let perm_flag = format!("--permission-mode={}", perm);
-    // 联网 + (非只读档位)本地读写执行, 让成品能真正产出
-    let allowed = allowed_tools_for(perm, false);
-    // 沙箱内 KB 永远挂在 /kb (sandbox_start 时挂载),
-    // 这里让 claude 把 /kb 也加进可读目录,并以 /workspace 为 cwd
-    let mut cmd = Command::new("docker");
-    cmd.args([
-        "exec",
-        "-i",
-        "-w",
-        "/workspace",
-        polaris_sandbox::CONTAINER_NAME,
-        "claude",
-        "--print",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--add-dir",
-        "/kb",
-        "--allowedTools",
-        &allowed,
-        &perm_flag,
-        prompt,
-    ])
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
-    no_window(&mut cmd); // 隐藏式: 不弹控制台窗口
-    let child = cmd
-        .spawn()
-        .map_err(|e| format!("在沙箱内调起 claude 失败: {}", e))?;
-    Ok(child)
+/// 解析 `codex exec --json` 的 JSONL 事件 → 与 claude 路线同形的 ChatStreamEvent。
+/// codex 事件形态(实测 v0.142):
+///   {"type":"thread.started",...} / {"type":"turn.started"}            → 忽略
+///   {"type":"item.started|updated|completed","item":{"id","type",...}} → 按 item.type 处理
+///   {"type":"turn.completed","usage":{...}}                            → 忽略(done 由进程退出统一发)
+///   {"type":"error"|"...failed", ...}                                  → error
+/// item.type:
+///   agent_message       → 助手正文(text 为「截至目前全文」), 增量发 delta;
+///   reasoning           → 思维链, 不外显(略);
+///   command_execution   → Bash 工具(started 时发一次 tool, 防重复);
+///   file_change|patch_* → 文件改动, 把可展示成品路径登记为 artifact;
+///   其余                → 当作通用 tool 事件透出。
+fn handle_codex_event(
+    app: &AppHandle,
+    req_id: &str,
+    conv_id: Option<&str>,
+    v: &Value,
+    accum: &mut String,
+    artifacts: &mut Vec<String>,
+    emitted: &mut HashMap<String, usize>,
+) {
+    let t = v.get("type").and_then(|x| x.as_str()).unwrap_or("");
+    // 顶层错误事件
+    if t == "error" || t.ends_with("failed") {
+        let msg = v
+            .get("message")
+            .and_then(|x| x.as_str())
+            .or_else(|| v.get("error").and_then(|e| e.get("message")).and_then(|x| x.as_str()))
+            .unwrap_or("codex 返回错误")
+            .to_string();
+        emit_event(
+            app,
+            ChatStreamEvent {
+                req_id: req_id.into(),
+                kind: "error".into(),
+                text: Some(format!("[codex] {}", msg)),
+                tool: None,
+                conversation_id: conv_id.map(|s| s.to_string()),
+            },
+        );
+        return;
+    }
+    if !t.starts_with("item.") {
+        return; // thread.* / turn.* 等不外显
+    }
+    let phase_completed = t == "item.completed";
+    let Some(item) = v.get("item") else { return };
+    let item_type = item.get("type").and_then(|x| x.as_str()).unwrap_or("");
+    let item_id = item
+        .get("id")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    match item_type {
+        "agent_message" => {
+            let text = item.get("text").and_then(|x| x.as_str()).unwrap_or("");
+            if text.is_empty() {
+                return;
+            }
+            // text 为「截至目前全文」: 按已发字节长度切出增量(防止 updated→completed 重复整段)。
+            let key = if item_id.is_empty() {
+                "__msg__".to_string()
+            } else {
+                item_id.clone()
+            };
+            let prev = emitted.get(&key).copied().unwrap_or(0);
+            let delta: Option<String> = if text.len() > prev && text.is_char_boundary(prev) {
+                Some(text[prev..].to_string())
+            } else if text.len() != prev {
+                // 非增长前缀(罕见): 整段当新片段发, 避免丢字
+                Some(text.to_string())
+            } else {
+                None
+            };
+            emitted.insert(key, text.len());
+            if let Some(d) = delta {
+                accum.push_str(&d);
+                emit_event(
+                    app,
+                    ChatStreamEvent {
+                        req_id: req_id.into(),
+                        kind: "delta".into(),
+                        text: Some(d),
+                        tool: None,
+                        conversation_id: conv_id.map(|s| s.to_string()),
+                    },
+                );
+            }
+        }
+        "reasoning" => { /* 思维链不外显 */ }
+        "command_execution" => {
+            // 只在 started 阶段发一次工具 pill, 防 started+completed 重复
+            if !phase_completed {
+                let cmd = item
+                    .get("command")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string());
+                emit_event(
+                    app,
+                    ChatStreamEvent {
+                        req_id: req_id.into(),
+                        kind: "tool".into(),
+                        text: cmd,
+                        tool: Some("Bash".into()),
+                        conversation_id: conv_id.map(|s| s.to_string()),
+                    },
+                );
+            }
+        }
+        "file_change" | "patch_apply" | "apply_patch" => {
+            // 改动的文件路径登记为成品(仅展示常见格式, 应用文件夹内部文件除外)
+            if let Some(changes) = item.get("changes").and_then(|c| c.as_array()) {
+                for ch in changes {
+                    if let Some(p) = ch.get("path").and_then(|x| x.as_str()) {
+                        let norm = p.replace('\\', "/");
+                        if is_displayable_artifact(&norm)
+                            && packaged_project_root(Path::new(&norm)).is_none()
+                            && !artifacts.contains(&norm)
+                        {
+                            artifacts.push(norm.clone());
+                            emit_event(
+                                app,
+                                ChatStreamEvent {
+                                    req_id: req_id.into(),
+                                    kind: "artifact".into(),
+                                    text: Some(norm),
+                                    tool: None,
+                                    conversation_id: conv_id.map(|s| s.to_string()),
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        other => {
+            // mcp_tool_call / web_search 等: started 时透一个通用 tool pill
+            if !phase_completed && !other.is_empty() {
+                let name = item
+                    .get("tool")
+                    .and_then(|x| x.as_str())
+                    .or_else(|| item.get("name").and_then(|x| x.as_str()))
+                    .unwrap_or(other)
+                    .to_string();
+                emit_event(
+                    app,
+                    ChatStreamEvent {
+                        req_id: req_id.into(),
+                        kind: "tool".into(),
+                        text: None,
+                        tool: Some(name),
+                        conversation_id: conv_id.map(|s| s.to_string()),
+                    },
+                );
+            }
+        }
+    }
 }
+
+// (Docker-in-Docker 沙箱执行路径已随 polaris-sandbox 板块下线 —— 游戏平台只在宿主机直跑 claude。)
 
 fn spawn_on_host(prompt: &str, perm: &str, art_dir: &Path, with_task: bool) -> Result<Child, String> {
     let perm_flag = format!("--permission-mode={}", perm);
@@ -993,6 +1144,64 @@ fn spawn_on_host(prompt: &str, perm: &str, art_dir: &Path, with_task: bool) -> R
         // 错误只在 spawn 本身失败 (e.g. exe 找不到), 不再是 prompt 太长
         format!("调起宿主机 claude CLI 失败: {}", e)
     })
+}
+
+/// 拉起官方 `codex exec --json`(非交互, JSONL 流式)。与 spawn_on_host 同构:
+/// prompt 走 stdin(末尾 `-`), cwd = polaris-app 根, 隐藏窗口, 进程组组长便于 kill_tree。
+/// 权限档位映射:
+/// - plan(拒绝授权/只读) → `--sandbox read-only`(只读, 不放行任何写/执行);
+/// - 其余(手动/自动) → `--dangerously-bypass-approvals-and-sandbox`(headless 无人审批,
+///   全自动放行本地读写执行 —— 与 claude headless 放行 Bash/PowerShell/文件、acceptEdits 等价,
+///   否则做图/做 PPT 要跑脚本时会卡在审批上)。
+fn spawn_codex_on_host(prompt: &str, perm: &str, art_dir: &Path, _with_task: bool) -> Result<Child, String> {
+    let cwd = claude_md::project_root().unwrap_or_else(|| {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    });
+
+    let mut args: Vec<String> = vec![
+        "exec".into(),
+        "--json".into(),
+        "--skip-git-repo-check".into(), // cwd 未必是 git 仓库
+    ];
+    if perm == "plan" {
+        args.push("--sandbox".into());
+        args.push("read-only".into());
+        // 只读档也放行 KB / 产物目录的读取范围(写仍被沙箱拦)
+        let kb_root = std::path::PathBuf::from(kb::kb_root());
+        if !kb_root.as_os_str().is_empty() && kb_root.exists() && !kb_root.starts_with(&cwd) {
+            args.push("--add-dir".into());
+            args.push(kb_root.to_string_lossy().to_string());
+        }
+    } else {
+        // headless 全自动: 无人能逐个点「同意」, 放行执行让成品(图/PPT/脚本产物)能真正落地。
+        args.push("--dangerously-bypass-approvals-and-sandbox".into());
+    }
+    if art_dir.exists() {
+        args.push("--add-dir".into());
+        args.push(art_dir.to_string_lossy().to_string());
+    }
+    // prompt 经 stdin 喂入(与 claude 同理: 避开命令行长度上限 / `-` 开头被当 flag)。
+    args.push("-".into());
+    let _ = prompt; // 实际内容由调用方写 stdin
+
+    let codex_bin: std::ffi::OsString = crate::doctor::resolve_codex_exe()
+        .map(|p| p.into_os_string())
+        .unwrap_or_else(|| "codex".into());
+    let mut cmd = Command::new(&codex_bin);
+    cmd.args(&args)
+        .current_dir(&cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::doctor::harden_child_env(&mut cmd);
+    no_window(&mut cmd);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    cmd.spawn()
+        .map_err(|e| format!("调起 codex CLI 失败: {}(可在设置里切回 Claude 引擎, 或先 `codex login` 授权 ChatGPT)", e))
 }
 
 // ───────────────────────── Artifacts (产物预览) ─────────────────────────
@@ -1802,8 +2011,10 @@ pub fn artifact_open_external(path: String) -> Result<(), String> {
     let path = ensure_artifact_path(&path)?.to_string_lossy().to_string();
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
-            .args(["/C", "start", "", &path])
+        // 用 explorer 直接打开文件(交给系统默认关联程序),避免 `cmd /C start`
+        // 对路径里的 & % ^ 等元字符做 shell 解释。参数经 CreateProcess 直传,不过 shell。
+        Command::new("explorer")
+            .arg(&path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }

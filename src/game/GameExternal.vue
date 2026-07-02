@@ -2,8 +2,11 @@
 // 外部 HTML 游戏播放器：iframe 全屏加载 public/external-games 下的自包含 HTML。
 import { computed } from "vue";
 import { platform } from "./platform";
+import { assetUrl } from "./assets";
 
-const url = computed(() => platform.externalUrl || "");
+// 外部游戏同样经 assetUrl 解析:设了 CDN 基址则从 R2 取(index.html 内部相对路径自动相对该 URL),
+// 否则用本地 public/ 路径。
+const url = computed(() => assetUrl(platform.externalUrl || "") || "");
 </script>
 
 <template>

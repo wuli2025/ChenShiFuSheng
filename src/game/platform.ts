@@ -9,18 +9,22 @@ export type Screen =
   | "external"
   | "library"
   | "gallery"
+  | "templates"
   | "settings";
 
 export interface PlatformState {
   screen: Screen;
   gameId: string | null;
   externalUrl: string | null;
+  // 「故事线模板」→「以此模板起草」时暂存的提示骨架，供生成页开局预填。
+  seedPrompt: string | null;
 }
 
 export const platform = reactive<PlatformState>({
   screen: "lobby",
   gameId: null,
   externalUrl: null,
+  seedPrompt: null,
 });
 
 /** 进入某个（内置/生成的）游戏 */
@@ -52,6 +56,15 @@ export function goLibrary() {
 export function goGallery() {
   platform.screen = "gallery";
 }
+export function goTemplates() {
+  platform.screen = "templates";
+}
 export function goSettings() {
   platform.screen = "settings";
+}
+
+/** 从某个故事线模板起草：带上提示骨架跳到生成页（不自动发送，交玩家再改）。 */
+export function goCreateWith(prompt: string) {
+  platform.seedPrompt = prompt;
+  platform.screen = "create";
 }

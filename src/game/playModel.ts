@@ -1,6 +1,6 @@
 // 统一播放模型 —— 把「内置精修剧本(GameDef)」与「AI 生成剧本(GeneratedGame)」
 // 归一成同一套数据，供唯一的播放器 GameView 渲染，彻底消除两套播放器的体验割裂。
-import type { GameDef } from "./engine";
+import type { GameDef, CapDef, WeightedEnding, Scorecard } from "./engine";
 import type { Mood } from "./audio";
 import {
   judgeGenEnding,
@@ -30,6 +30,8 @@ export interface PlayChoice {
   text: string;
   hint?: string;
   effects?: Record<string, number>;
+  tags?: string[];
+  caps?: Record<string, number>;
   next: string;
 }
 
@@ -51,9 +53,11 @@ export interface PlayScene {
   // 纯叙事幕:无 choices,用 next 自动续接到下一幕(节奏:多转几幕再给一次抉择)
   next?: string;
   // 进入本幕时自动结算的「命运/偶发」事件:被动改属性 + 一行提示
-  event?: { effects?: Record<string, number>; note?: string };
+  event?: { effects?: Record<string, number>; note?: string; caps?: Record<string, number> };
   // 史笔批注:进入本幕时显示的一行小字
   footnote?: string;
+  // Checkpoint 评分卡(职业/专业体验向):进场公开打一次分
+  scorecard?: Scorecard;
 }
 
 export interface PlayStat {
@@ -85,6 +89,13 @@ export interface PlayModel {
   };
   judge: (stats: Record<string, number>) => PlayEnding;
   raw?: GeneratedGame; // 生成游戏保留原始数据，供自由输入续写
+  // —— 评判机制(复盘评估)——
+  caps?: CapDef[];
+  initialCaps?: Record<string, number>;
+  endings?: WeightedEnding[];
+  career?: boolean;
+  recommend?: (caps: Record<string, number>, stats: Record<string, number>) => string;
+  diagnoseByCap?: Record<string, string>;
 }
 
 const GEN_STAT_COLORS = ["#8aa2b8", "#c98b6b", "#b7c2a8", "#9a8fb0", "#c9a86b"];
@@ -109,8 +120,11 @@ export function fromDef(def: GameDef): PlayModel {
       voiceSrc: voiceFor(def.id, id),
       mood: inferMood(`${s.scene} ${s.era} ${(s.lines ?? []).join("")}`),
       next: s.next,
-      event: s.event ? { effects: s.event.effects, note: s.event.note } : undefined,
+      event: s.event
+        ? { effects: s.event.effects, note: s.event.note, caps: s.event.caps }
+        : undefined,
       footnote: s.footnote,
+      scorecard: s.scorecard,
     };
   }
   return {
@@ -123,6 +137,12 @@ export function fromDef(def: GameDef): PlayModel {
     scenes,
     theme: { ...def.theme },
     judge: (s) => def.judge(s),
+    caps: def.caps,
+    initialCaps: def.initialCaps,
+    endings: def.endings,
+    career: def.career,
+    recommend: def.recommend,
+    diagnoseByCap: def.diagnoseByCap,
   };
 }
 

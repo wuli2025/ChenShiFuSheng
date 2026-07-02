@@ -5,7 +5,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { backToLobby, platform } from "./platform";
 import { getGame as getBuiltinDef } from "./registry";
-import { getGame as getGeneratedGame } from "./gamesStore";
+import { getGame as getGeneratedGame, saveGame } from "./gamesStore";
 import { statWord as statWordOf } from "./engine";
 import {
   fromDef,
@@ -15,8 +15,16 @@ import {
   type PlayModel,
   type PlayScene,
 } from "./playModel";
-import type { GenScene } from "./story-schema";
+import { sceneBackground, type GenScene } from "./story-schema";
+import {
+  buildProfile,
+  fateFork,
+  scoreCard,
+  type ScorecardResult,
+} from "./assess";
 import { continueScene } from "./generator";
+import { genImage, hydrateSceneImages, resolveImageRef } from "./imagegen";
+import { getImageCfg } from "./gameSettings";
 import { audioCfg, engine } from "./audio";
 import { prefs } from "./prefs";
 import InkParticles from "./InkParticles.vue";
@@ -53,9 +61,36 @@ const rawScenes = reactive<Record<string, GenScene>>(
   model?.raw ? { ...model.raw.scenes } : {}
 );
 
+// 把 "idb://" 图片引用水合成 objectURL 并刷新对应场景背景(进场/读档/懒生成后都要跑)。
+async function hydrateImages() {
+  const changed = await hydrateSceneImages(rawScenes);
+  for (const id of changed) {
+    if (scenes[id]) scenes[id].bg = sceneBackground(rawScenes[id]);
+  }
+}
+void hydrateImages();
+
 // —— 运行态 ——
 const scenes = reactive<Record<string, PlayScene>>(model ? { ...model.scenes } : {});
 const stats = reactive<Record<string, number>>(model ? { ...model.initialStats } : {});
+// —— 评判机制:能力维度累计 + 行为标签频次 ——
+function freshCaps(): Record<string, number> {
+  const c: Record<string, number> = {};
+  for (const cap of model?.caps || []) c[cap.key] = model?.initialCaps?.[cap.key] ?? 10;
+  return c;
+}
+const caps = reactive<Record<string, number>>(freshCaps());
+const tagCounts = reactive<Record<string, number>>({});
+const curScorecard = ref<ScorecardResult | null>(null);
+function applyCaps(delta?: Record<string, number>) {
+  if (!delta) return;
+  for (const k of Object.keys(delta)) {
+    if (k in caps) caps[k] = Math.max(0, Math.min(100, caps[k] + (delta[k] || 0)));
+  }
+}
+function tallyTags(tags?: string[]) {
+  for (const t of tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1;
+}
 const sceneId = ref(model?.start || "");
 const lineIdx = ref(0); // 已完成揭示的行数
 const typed = ref(0); // 当前行已打出的字数
@@ -101,6 +136,54 @@ const visibleLines = computed(() => {
   return out;
 });
 const ending = computed(() => (model ? model.judge(stats) : null));
+
+// —— 复盘评估(结局后呈现:能力画像 / 命运岔口 / 行为证据 / 诊断质疑)——
+const profile = computed(() =>
+  ended.value && model ? buildProfile(model.caps, caps) : null
+);
+const fork = computed(() =>
+  ended.value && model ? fateFork(model.endings, stats, ending.value?.title) : null
+);
+const topTags = computed(() =>
+  Object.keys(tagCounts)
+    .map((t) => ({ tag: t, n: tagCounts[t] }))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 6)
+);
+const diagnosis = computed(() => {
+  const w = profile.value?.weakest;
+  if (!w || !model?.diagnoseByCap) return "";
+  return model.diagnoseByCap[w.key] || "";
+});
+const recommendLine = computed(() =>
+  ended.value && model?.recommend ? model.recommend(caps, stats) : ""
+);
+// 能力雷达:把 profile.axes 摊成多边形点(viewBox 200x200,中心 100,半径 78)。
+const radar = computed(() => {
+  const ax = profile.value?.axes || [];
+  const n = ax.length;
+  if (n < 3) return null;
+  const cx = 100, cy = 100, R = 78;
+  const pt = (i: number, r: number) => {
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  };
+  const rings = [0.25, 0.5, 0.75, 1].map((f) =>
+    ax.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(",")).join(" ")
+  );
+  const spokes = ax.map((_, i) => {
+    const [x, y] = pt(i, R);
+    return { x: x.toFixed(1), y: y.toFixed(1) };
+  });
+  const poly = ax
+    .map((a, i) => pt(i, R * Math.max(0.06, a.value / 100)).map((v) => v.toFixed(1)).join(","))
+    .join(" ");
+  const labels = ax.map((a, i) => {
+    const [x, y] = pt(i, R + 16);
+    return { x: x.toFixed(1), y: y.toFixed(1), label: a.label, value: a.value };
+  });
+  return { rings, spokes, poly, labels };
+});
 const sceneBg = computed(
   () =>
     scene.value?.bg ||
@@ -243,22 +326,59 @@ function playNarration(src?: string) {
   }
 }
 
+// 已尝试过懒生成的场景 id(无论成败),避免重复请求。
+const imgTried = new Set<string>();
+/**
+ * 懒生成场景配图:仅生成游戏、该场景尚无图、原始数据有 bgPrompt 时,
+ * 后台静默出图,成功即挂到 scenes[id].bg(响应式,画面自动更新)。
+ * 让 AI 续写催生的支线场景也能自动获得水墨配图。
+ */
+function maybeGenSceneImage(id: string) {
+  if (!model || model.kind !== "generated") return;
+  if (imgTried.has(id)) return;
+  const ps = scenes[id];
+  const raw = rawScenes[id];
+  // raw.bg 才是「真实图片」标记;scenes[id].bg 出厂就被填了 CSS 渐变占位,不能据它判断。
+  if (!ps || ps.img || !raw?.bgPrompt || raw.bg) return;
+  if (!getImageCfg().enabled) return;
+  imgTried.add(id);
+  genImage(raw.bgPrompt)
+    .then(async (ref) => {
+      if (!ref || !rawScenes[id]) return;
+      rawScenes[id].bg = ref;
+      // idb:// 引用先水合成 objectURL,再重算 url(...) 背景,响应式刷新画面
+      const url = await resolveImageRef(ref);
+      if (url) rawScenes[id].bgUrl = url;
+      if (scenes[id]) scenes[id].bg = sceneBackground(rawScenes[id]);
+      persist();
+      // 原始场景的图写回游戏库:下次会话直接命中,不再重新出图扣费。
+      // (rawScenes 与 model.raw.scenes 共享场景对象,上面赋值已生效,存一次即可)
+      if (model?.raw?.scenes[id]) saveGame(model.raw);
+    })
+    .catch(() => {});
+}
+
 function enterScene(id: string) {
   sceneId.value = id;
   resetReveal();
   sceneCount++;
   engine.setScene(sceneCount);
   applyMood();
+  maybeGenSceneImage(id);
   const s = scenes[id];
   playNarration(s?.voiceSrc);
   if (s) {
     logPush({ kind: "chapter", text: s.chapter });
     // 进场结算被动「命运」事件 + 收集史笔批注
     if (s.event?.effects) applyEffects(s.event.effects);
+    applyCaps(s.event?.caps);
+    // Checkpoint 评分卡:在事件结算后按当前属性公开打一次分(快照,不随后续变化)
+    curScorecard.value = s.scorecard ? scoreCard(s.scorecard, stats) : null;
     passiveNote.value = [s.event?.note, s.footnote].filter(Boolean).join("  ·  ");
     if (passiveNote.value) logPush({ kind: "line", text: `（${passiveNote.value}）` });
   } else {
     passiveNote.value = "";
+    curScorecard.value = null;
   }
   persist();
 }
@@ -304,6 +424,8 @@ function pick(c: PlayChoice) {
   engine.sfx("choice");
   logPush({ kind: "choice", text: c.text });
   applyEffects(c.effects);
+  applyCaps(c.caps);
+  tallyTags(c.tags);
   gotoScene(c.next);
 }
 
@@ -349,6 +471,8 @@ function buildRunState(): RunState {
     extraScenes: extras,
     log: [...log],
     updatedAt: Date.now(),
+    caps: { ...caps },
+    tagCounts: { ...tagCounts },
   };
 }
 function persist() {
@@ -361,8 +485,14 @@ function restoreFrom(run: RunState) {
       rawScenes[k] = run.extraScenes[k];
       scenes[k] = genSceneToPlay(run.extraScenes[k]);
     }
+    void hydrateImages();
   }
   Object.assign(stats, run.stats);
+  if (run.caps) Object.assign(caps, run.caps);
+  if (run.tagCounts) {
+    Object.keys(tagCounts).forEach((k) => delete tagCounts[k]);
+    Object.assign(tagCounts, run.tagCounts);
+  }
   sceneId.value = scenes[run.sceneId] ? run.sceneId : model!.start;
   log.splice(0, log.length, ...(run.log || []));
   ended.value = run.ended;
@@ -375,8 +505,12 @@ function restoreFrom(run: RunState) {
 // —— 多档位存读 ——
 function doSave(slotId: string) {
   if (!model) return;
-  saveSlot(model.id, slotId, buildRunState(), scenes[sceneId.value]?.chapter || "");
+  const ok = saveSlot(model.id, slotId, buildRunState(), scenes[sceneId.value]?.chapter || "");
   slots.value = listSlots(model.id);
+  if (!ok) {
+    toast.error("存档失败：本地存储空间已满，请清理旧游戏或档位");
+    return;
+  }
   toast.success(slotId === "q" ? "已快速存档" : `已存入档位 ${slotId}`);
 }
 function doLoad(slotId: string) {
@@ -403,7 +537,12 @@ function restart() {
   Object.assign(scenes, model.scenes);
   Object.keys(rawScenes).forEach((k) => delete rawScenes[k]);
   if (model.raw) Object.assign(rawScenes, model.raw.scenes);
+  imgTried.clear(); // 重开后允许缺图场景重新出图
+  void hydrateImages();
   Object.assign(stats, model.initialStats);
+  Object.assign(caps, freshCaps());
+  Object.keys(tagCounts).forEach((k) => delete tagCounts[k]);
+  curScorecard.value = null;
   log.splice(0, log.length);
   ended.value = false;
   auto.value = false;
@@ -591,6 +730,20 @@ onBeforeUnmount(() => {
             <div class="ink-scene">{{ scene.chapter }}</div>
             <div class="fate-note" v-if="passiveNote">{{ passiveNote }}</div>
 
+            <!-- Checkpoint 评分卡(评判机制·过程性 rubric,维度对玩家公开) -->
+            <div class="scorecard" v-if="curScorecard" @click.stop>
+              <div class="sc-head">
+                <span>{{ curScorecard.title }}</span>
+                <span class="sc-total">{{ curScorecard.total }}<small>分</small></span>
+              </div>
+              <div class="sc-item" v-for="it in curScorecard.items" :key="it.label">
+                <span class="sc-label">{{ it.label }}</span>
+                <span class="sc-bar"><i :style="{ width: it.value + '%' }"></i></span>
+                <span class="sc-val">{{ it.value }}</span>
+              </div>
+              <div class="sc-note" v-if="curScorecard.note">{{ curScorecard.note }}</div>
+            </div>
+
             <div class="ink-text" :style="{ fontSize: 20 * prefs.fontScale + 'px' }">
               <p
                 v-for="(ln, i) in visibleLines"
@@ -643,6 +796,51 @@ onBeforeUnmount(() => {
               <div class="end-stats">
                 <span v-for="s in model.stats" :key="s.key">{{ s.label }} {{ stats[s.key] }}</span>
               </div>
+
+              <!-- 复盘画像 · 评判机制「看见自己」一层 -->
+              <div class="review" v-if="profile">
+                <div class="review-head">— 复盘 · 你是个什么样的决策者 —</div>
+                <div class="review-body">
+                  <div class="radar" v-if="radar">
+                    <svg viewBox="-14 -18 228 236" aria-hidden="true">
+                      <g class="rgrid">
+                        <polygon v-for="(r, i) in radar.rings" :key="'r' + i" :points="r" />
+                        <line
+                          v-for="(sp, i) in radar.spokes"
+                          :key="'sp' + i"
+                          x1="100"
+                          y1="100"
+                          :x2="sp.x"
+                          :y2="sp.y"
+                        />
+                      </g>
+                      <polygon class="rshape" :points="radar.poly" />
+                      <g class="rlabels">
+                        <text
+                          v-for="(l, i) in radar.labels"
+                          :key="'lb' + i"
+                          :x="l.x"
+                          :y="l.y"
+                        >{{ l.label }}</text>
+                      </g>
+                    </svg>
+                  </div>
+                  <div class="review-text">
+                    <p class="rv-line" v-if="profile.review">{{ profile.review }}</p>
+                    <p class="rv-rec" v-if="recommendLine">{{ recommendLine }}</p>
+                    <div class="rv-tags" v-if="topTags.length">
+                      <span class="rv-tag" v-for="t in topTags" :key="t.tag">
+                        {{ t.tag }}<i>×{{ t.n }}</i>
+                      </span>
+                    </div>
+                    <p class="rv-fork" v-if="fork && fork.nearMiss">
+                      命运岔口 · 你距「{{ fork.nearMiss.title }}」仅差 {{ fork.margin }} 分——当年若有一步另作抉择，便是另一种人生。
+                    </p>
+                    <p class="rv-diag" v-if="diagnosis">{{ diagnosis }}</p>
+                  </div>
+                </div>
+              </div>
+
               <div class="end-collect">
                 结局图鉴 · 已解阅 {{ unlocked.length }}<template v-if="totalEndings"> / {{ totalEndings }}</template>
                 <div class="collect-list">
@@ -1290,6 +1488,186 @@ onBeforeUnmount(() => {
   border-color: rgba(255, 255, 255, 0.15);
   background: transparent;
   color: #9aa1ab;
+}
+
+/* Checkpoint 评分卡(游玩中) */
+.scorecard {
+  margin: 4px 0 16px;
+  max-width: 420px;
+  padding: 14px 18px;
+  border: 1px solid rgba(138, 162, 184, 0.28);
+  border-left: 2px solid #8aa2b8;
+  border-radius: 8px;
+  background: linear-gradient(120deg, rgba(44, 70, 97, 0.18), rgba(8, 12, 20, 0.1));
+  cursor: default;
+}
+.sc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: "Songti SC", serif;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  color: #cdb89a;
+  margin-bottom: 12px;
+}
+.sc-total {
+  font-size: 26px;
+  color: #e9e2d2;
+  letter-spacing: 0;
+}
+.sc-total small {
+  font-size: 12px;
+  color: #8a8f98;
+  margin-left: 2px;
+}
+.sc-item {
+  display: grid;
+  grid-template-columns: 64px 1fr 30px;
+  align-items: center;
+  gap: 10px;
+  margin: 7px 0;
+}
+.sc-label {
+  font-size: 12.5px;
+  color: #9aa3ad;
+  letter-spacing: 0.08em;
+}
+.sc-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.sc-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #5b86a8, #8aa2b8);
+  transition: width 0.7s ease;
+}
+.sc-val {
+  font-size: 12px;
+  color: #cfc8ba;
+  font-family: sans-serif;
+  text-align: right;
+}
+.sc-note {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #cdb89a;
+  letter-spacing: 0.04em;
+  padding-left: 10px;
+  border-left: 2px solid rgba(201, 139, 107, 0.45);
+}
+
+/* 复盘画像(结局后) */
+.review {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  animation: rise 1s ease;
+}
+.review-head {
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  color: #7e8a96;
+  margin-bottom: 16px;
+}
+.review-body {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.radar {
+  flex: none;
+  width: 188px;
+  height: 196px;
+}
+.radar svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.rgrid polygon {
+  fill: none;
+  stroke: rgba(138, 162, 184, 0.18);
+  stroke-width: 0.8;
+}
+.rgrid line {
+  stroke: rgba(138, 162, 184, 0.16);
+  stroke-width: 0.7;
+}
+.rshape {
+  fill: rgba(201, 139, 107, 0.26);
+  stroke: #c98b6b;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.rlabels text {
+  fill: #b9b2a3;
+  font-size: 9px;
+  font-family: "Songti SC", serif;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+.review-text {
+  flex: 1;
+  min-width: 240px;
+}
+.rv-line {
+  font-family: "Songti SC", serif;
+  font-size: 16px;
+  color: #ece3d0;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+}
+.rv-rec {
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: #cdb89a;
+  letter-spacing: 0.03em;
+  margin: 8px 0;
+}
+.rv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.rv-tag {
+  font-size: 12px;
+  color: #cfc8ba;
+  border: 1px solid rgba(138, 162, 184, 0.4);
+  border-radius: 6px;
+  padding: 3px 9px;
+  letter-spacing: 0.06em;
+}
+.rv-tag i {
+  color: #8a8f98;
+  font-style: normal;
+  margin-left: 4px;
+  font-size: 11px;
+}
+.rv-fork {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #8aa2b8;
+  letter-spacing: 0.03em;
+  margin: 12px 0 8px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(138, 162, 184, 0.5);
+}
+.rv-diag {
+  font-family: "Songti SC", serif;
+  font-size: 14px;
+  line-height: 1.9;
+  color: #d3a98f;
+  letter-spacing: 0.04em;
+  margin: 10px 0 0;
 }
 
 /* 续写遮罩 */

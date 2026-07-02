@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // 生成页（对话框形式）：在对话框里描述想要的游戏 → 生成；可继续对话微调（累积需求重生成）。
 // 上传资料、生成配图为输入框旁的次要功能。不依赖知识库。
-import { nextTick, ref } from "vue";
+import { nextTick, onMounted, ref } from "vue";
 import { enterGame, platform } from "./platform";
 import { generateGame, type CreateReq } from "./generator";
 import { saveGame } from "./gamesStore";
-import { genImagesFor } from "./imagegen";
+import { describeImageError, genImagesFor, lastImageError } from "./imagegen";
 import { getImageCfg } from "./gameSettings";
 import {
   addUpload,
@@ -39,6 +39,7 @@ const messages = ref<Msg[]>([]);
 const input = ref("");
 const busy = ref(false);
 const progress = ref("");
+const imgNote = ref(""); // 后台配图进度(不阻塞对话)
 const withImages = ref(false);
 
 const uploads = ref<UploadItem[]>(listUploads());
@@ -87,24 +88,21 @@ async function send(text?: string) {
       progress.value = info.note ? info.note : `生成中… 已接收 ${info.chars} 字`;
     });
 
+    // 先落库再补图:配图最多可能要几分钟,不能让用户白等,
+    // 更不能因为中途关页面把整个生成的游戏丢掉。
+    if (!saveGame(game)) {
+      toast.error("本地存储已满，游戏可能未保存成功（可删除旧游戏释放空间）");
+    }
+    messages.value.push({ id: nid(), role: "ai", game });
+    toast.success(`已生成《${game.title}》`);
+
     if (withImages.value) {
       if (getImageCfg().enabled) {
-        progress.value = "正在生成场景配图…";
-        const prompts = Object.values(game.scenes)
-          .filter((s) => s.bgPrompt)
-          .map((s) => ({ id: s.id, prompt: s.bgPrompt as string }));
-        const imgs = await genImagesFor(prompts);
-        for (const id of Object.keys(imgs)) {
-          if (imgs[id] && game.scenes[id]) game.scenes[id].bg = imgs[id] as string;
-        }
+        void genImagesInBackground(game);
       } else {
         toast.info("未在设置里配置生图模型，已跳过配图");
       }
     }
-
-    saveGame(game);
-    messages.value.push({ id: nid(), role: "ai", game });
-    toast.success(`已生成《${game.title}》`);
   } catch (e: any) {
     messages.value.push({
       id: nid(),
@@ -116,6 +114,38 @@ async function send(text?: string) {
     busy.value = false;
     progress.value = "";
     await scrollDown();
+  }
+}
+
+/** 后台批量出图:逐张完成即挂到场景并落库,进度实时可见,失败给出可排障的原因。 */
+async function genImagesInBackground(game: GeneratedGame) {
+  const prompts = Object.values(game.scenes)
+    .filter((s) => s.bgPrompt)
+    .map((s) => ({ id: s.id, prompt: s.bgPrompt as string }));
+  if (!prompts.length) return;
+  let done = 0;
+  let okCount = 0;
+  imgNote.value = `配图生成中 0/${prompts.length}…`;
+  try {
+    await genImagesFor(prompts, (id, ref) => {
+      done++;
+      imgNote.value = `配图生成中 ${done}/${prompts.length}…`;
+      if (ref && game.scenes[id]) {
+        game.scenes[id].bg = ref;
+        okCount++;
+        saveGame(game); // 逐张落库,中途退出也不丢已完成的图
+      }
+    });
+  } finally {
+    imgNote.value = "";
+  }
+  if (okCount >= prompts.length) {
+    toast.success(`《${game.title}》配图完成（${okCount} 张）`);
+  } else {
+    const why = describeImageError(lastImageError());
+    toast.info(
+      `《${game.title}》配图完成 ${okCount}/${prompts.length}${why ? `：${why}` : ""}`
+    );
   }
 }
 
@@ -199,6 +229,14 @@ const { isOver } = useFileDrop({
   active: () => platform.screen === "create" && !busy.value,
   onDrop: ingestPaths,
 });
+
+// 从「故事线模板 → 以此模板起草」跳进来时，预填提示骨架（不自动发送，交玩家补题材再改）。
+onMounted(() => {
+  if (platform.seedPrompt) {
+    input.value = platform.seedPrompt;
+    platform.seedPrompt = null;
+  }
+});
 </script>
 
 <template>
@@ -246,6 +284,9 @@ const { isOver } = useFileDrop({
 
       <div v-if="busy" class="msg ai">
         <div class="bubble ai busy">{{ progress || "生成中…" }}</div>
+      </div>
+      <div v-if="imgNote" class="msg ai">
+        <div class="bubble ai busy">{{ imgNote }}</div>
       </div>
     </div>
 

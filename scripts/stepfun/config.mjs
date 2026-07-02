@@ -6,9 +6,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, "..", "..");
 
-export const STEP_KEY =
-  process.env.STEPFUN_KEY ||
-  "1AJREc19rwAzI9EItOIFAPB2UZZjjrGrAepmho62ikiWoLXyr5ntKsVzh4JyrQfFC";
+// key 只从环境变量读,不给硬编码兜底(硬编码等于把密钥提交进仓库)。缺失时立即报错退出。
+export const STEP_KEY = process.env.STEPFUN_KEY || "";
+if (!STEP_KEY) {
+  console.error("缺少环境变量 STEPFUN_KEY（阶跃星辰 API Key）");
+  process.exit(1);
+}
 
 export const BASE = "https://api.stepfun.com/v1";
 export const IMAGE_MODEL = "step-1x-medium";

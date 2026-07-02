@@ -9,7 +9,6 @@
 //! placeholder marker: 顶部含 `polaris:placeholder` 行表示「未填写」, 不注入
 
 use crate::conv;
-use crate::fable;
 use crate::kb;
 use anyhow::Result;
 use directories::UserDirs;
@@ -234,12 +233,7 @@ pub fn render_for_project(project_id: Option<&str>, _user_prompt: &str, use_kb: 
             ));
         }
     }
-    // ①.5 检索枢纽块(寓言计划神经层):盘点过才注入;开知识库给完整编排指令,
-    //     关着只给一行 CLI 提示 —— agent 是检索编排者,grep/RAG 都是它的工具。
-    let fable_block = fable::agent::fable_context_block(use_kb);
-    if !fable_block.is_empty() {
-        kb_block.push_str(&fable_block);
-    }
+    // (寓言计划「检索枢纽」RAG 注入块已随后端精简下线 —— 游戏平台只用知识库直读。)
     if !kb_block.is_empty() {
         kb_block.push_str("---\n\n");
         sections.push(kb_block);

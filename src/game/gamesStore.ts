@@ -14,11 +14,19 @@ function readAll(): GeneratedGame[] {
   }
 }
 
-function writeAll(list: GeneratedGame[]) {
+// bgUrl 是运行时 objectURL(blob:),跨会话无效,持久化时剥掉。
+function stripRuntime(k: string, v: unknown): unknown {
+  return k === "bgUrl" ? undefined : v;
+}
+
+/** 写入失败(localStorage 配额满等)返回 false,调用方必须提示用户,不许静默丢数据。 */
+function writeAll(list: GeneratedGame[]): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
-  } catch {
-    /* 配额满等异常忽略 */
+    localStorage.setItem(KEY, JSON.stringify(list, stripRuntime));
+    return true;
+  } catch (e) {
+    console.warn("[gamesStore] 持久化失败(localStorage 配额满?)", e);
+    return false;
   }
 }
 
@@ -31,10 +39,10 @@ export function getGame(id: string | null): GeneratedGame | null {
   return readAll().find((g) => g.id === id) || null;
 }
 
-export function saveGame(g: GeneratedGame) {
+export function saveGame(g: GeneratedGame): boolean {
   const list = readAll().filter((x) => x.id !== g.id);
   list.push(g);
-  writeAll(list);
+  return writeAll(list);
 }
 
 export function removeGame(id: string) {

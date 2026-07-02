@@ -1,3 +1,5 @@
+import { evalArith } from "./expr";
+
 // 生成式游戏 · 通用剧情数据结构
 // 由 LLM 生成、引擎消费。沿用《尘世浮生》的"属性 + 场景图 + 选项 + 加权结局"思路，
 // 但完全数据驱动、不写死任何剧情，支持自由输入催生支线（continueScene 注入新场景）。
@@ -19,7 +21,8 @@ export interface GenScene {
   id: string;
   title: string; // 场景小标题，如 — 一 · 城南旧寓 —
   bgPrompt?: string; // 给生图模型的画面描述
-  bg?: string; // 生成后的背景图 URL / dataURL（可空）
+  bg?: string; // 生成后的背景图引用:"idb://<key>"(本地缓存) / URL / dataURL（可空）
+  bgUrl?: string; // 运行时字段:idb:// 引用水合出的 objectURL,不参与持久化
   bgCss?: string; // 回退用 CSS 背景
   lines: string[]; // 旁白逐句
   options: GenOption[]; // 2-3 个分支选项
@@ -54,7 +57,9 @@ const DEFAULT_BG_CSS =
   "radial-gradient(120% 90% at 80% 0%, rgba(44,70,97,.45), transparent 60%), radial-gradient(100% 80% at 0% 100%, rgba(90,55,50,.35), transparent 55%), #14161a";
 
 export function sceneBackground(s: GenScene): string {
-  if (s.bg) return `url("${s.bg}") center/cover no-repeat`;
+  // idb:// 是持久化引用,不能直接进 CSS;水合(hydrateSceneImages)后走 bgUrl。
+  const u = s.bgUrl || (s.bg && !s.bg.startsWith("idb://") ? s.bg : "");
+  if (u) return `url("${u}") center/cover no-repeat`;
   return s.bgCss || DEFAULT_BG_CSS;
 }
 
@@ -73,9 +78,9 @@ export function evalWeight(expr: string, stats: Record<string, number>): number 
   }
   if (!/^[-+*/()\d.\s]+$/.test(s)) return -Infinity;
   try {
-    // eslint-disable-next-line no-new-func
-    const v = Function(`"use strict";return(${s});`)();
-    return typeof v === "number" && Number.isFinite(v) ? v : -Infinity;
+    // 手写解析器求值:生产 CSP 禁用 Function()/eval,动态代码在发行版必炸(见 expr.ts)
+    const v = evalArith(s);
+    return Number.isFinite(v) ? v : -Infinity;
   } catch {
     return -Infinity;
   }

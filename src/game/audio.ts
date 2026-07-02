@@ -222,12 +222,21 @@ class AudioEngine {
       const now = this.ctx.currentTime;
       this.bgmGain.gain.setTargetAtTime(0, now, 0.6);
       this.windGain?.gain.setTargetAtTime(0, now, 0.6);
+      // 捕获当前节点到局部,淡出结束后停源 + 断连,避免快速反复开关积累孤立节点。
       const voices = this.voices;
       const wind = this.wind;
+      const bgmGain = this.bgmGain;
+      const bgmFilter = this.bgmFilter;
+      const windGain = this.windGain;
       window.setTimeout(() => {
         voices.forEach((v) => {
           try {
             v.osc.stop();
+          } catch {
+            /* ignore */
+          }
+          try {
+            v.gain.disconnect();
           } catch {
             /* ignore */
           }
@@ -237,10 +246,22 @@ class AudioEngine {
         } catch {
           /* ignore */
         }
+        // 断开整条 BGM 链路,让节点可被回收(下次 startBgm 会重建全新节点)。
+        for (const node of [bgmFilter, bgmGain, windGain]) {
+          try {
+            node?.disconnect();
+          } catch {
+            /* ignore */
+          }
+        }
       }, 1500);
     }
+    // 立即清空引用:后续 startBgm 会新建节点,旧节点仅由上面的局部变量持有到断连。
     this.voices = [];
     this.wind = null;
+    this.bgmGain = null;
+    this.bgmFilter = null;
+    this.windGain = null;
     this.started = false;
   }
 

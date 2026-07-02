@@ -26,3 +26,8 @@ PolarisKB
 # 本地验证用的 claude 凭证种子（绝不进镜像）
 .claude-seed
 .docker-build.log
+
+# 环境变量与密钥绝不进镜像
+.env
+.env.*
+!.env.example

@@ -496,49 +496,7 @@ pub fn conv_archive_conversation(id: String, archived: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// 回声层(echo.rs)蒸馏取材:since_ms 之后有更新、未归档的对话 → (标题, 文字稿)。
-/// 文字稿只含 user/assistant 轮次;超长截尾保留最新内容。
-pub(crate) fn transcripts_since(
-    since_ms: i64,
-    max_convs: usize,
-    per_conv_chars: usize,
-) -> Vec<(String, String)> {
-    let state = STATE.read();
-    let mut convs: Vec<&Conversation> = state
-        .conversations
-        .iter()
-        .filter(|c| c.updated_at > since_ms && !c.archived)
-        .collect();
-    convs.sort_by_key(|c| std::cmp::Reverse(c.updated_at));
-    convs.truncate(max_convs);
-    convs
-        .iter()
-        .map(|c| {
-            let mut buf = String::new();
-            for msg in state.messages.iter().filter(|m| m.conversation_id == c.id) {
-                let who = match msg.role.as_str() {
-                    "user" => "用户",
-                    "assistant" => "助手",
-                    _ => continue,
-                };
-                buf.push_str(who);
-                buf.push_str(": ");
-                buf.push_str(msg.content.trim());
-                buf.push('\n');
-            }
-            let s = if buf.chars().count() > per_conv_chars {
-                let tail: String = {
-                    let chars: Vec<char> = buf.chars().collect();
-                    chars[chars.len() - per_conv_chars..].iter().collect()
-                };
-                format!("…(前文截断)\n{tail}")
-            } else {
-                buf
-            };
-            (c.title.clone(), s)
-        })
-        .collect()
-}
+// (transcripts_since 已随回声层 echo.rs 下线移除 —— 游戏平台不再做跨对话蒸馏取材。)
 
 #[cfg_attr(feature = "desktop", tauri::command)]
 pub fn conv_delete_conversation(conversation_id: String) -> Result<(), String> {

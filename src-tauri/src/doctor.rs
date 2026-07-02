@@ -457,6 +457,66 @@ fn resolve_claude_exe_uncached() -> Option<PathBuf> {
         .or_else(|| cands.into_iter().find(|p| p.exists()))
 }
 
+/// chat.rs spawn codex 用的解析缓存(同 CLAUDE_EXE_CACHE 思路)。
+static CODEX_EXE_CACHE: once_cell::sync::Lazy<Mutex<Option<PathBuf>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(None));
+
+/// 已知的 codex 可执行文件候选。codex(官方 `@openai/codex` npm 包)在 Windows 上
+/// **没有同名原生 .exe**(靠 `codex.cmd` → node 启动器拉真二进制),故这里以 `codex.cmd`
+/// (Rust 现代 std 能经 cmd.exe 自动包装运行)和 PATH 命中为主;类 Unix 用裸 `codex`。
+fn codex_candidates() -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Some(h) = home_dir() {
+        // 官方原生脚本 / brew: ~/.local/bin、/usr/local/bin 等已在 PATH;这里补 npm 免 sudo 装的 node 全局 bin
+        v.push(h.join(".local").join("bin").join("codex"));
+        v.push(h.join(".local").join("polaris-node").join("bin").join("codex"));
+    }
+    if let Some(prefix) = npm_global_prefix() {
+        v.push(prefix.join("codex.exe"));
+        v.push(prefix.join("codex.cmd"));
+        v.push(prefix.join("codex"));
+    }
+    if let Some(h) = home_dir() {
+        let appdata_npm = h.join("AppData").join("Roaming").join("npm");
+        v.push(appdata_npm.join("codex.exe"));
+        v.push(appdata_npm.join("codex.cmd"));
+    }
+    v
+}
+
+/// 解析一个「可直接 spawn」的 codex 可执行文件全路径, 供 chat.rs 调起官方 codex CLI。
+/// 偏好原生 `.exe`(类 Unix / 极少数打包) → PATH 命中 → npm 的 `codex.cmd` shim;
+/// 全落空回 None, 调用方退回裸名 "codex" 靠 PATH。带进程内缓存。
+pub fn resolve_codex_exe() -> Option<PathBuf> {
+    if let Some(p) = CODEX_EXE_CACHE.lock().as_ref() {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+    let is_exe = |p: &std::path::Path| {
+        p.extension()
+            .map(|e| e.eq_ignore_ascii_case("exe"))
+            .unwrap_or(false)
+    };
+    let hits = which_all("codex");
+    let resolved = hits
+        .iter()
+        .find(|p| is_exe(p))
+        .cloned()
+        .or_else(|| codex_candidates().into_iter().find(|p| is_exe(p) && p.exists()))
+        // PATH 命中(可能是 .cmd / 无扩展 shell 脚本) → 现代 Rust std 能经 cmd.exe 运行 .cmd
+        .or_else(|| {
+            hits.into_iter().find(|p| {
+                p.extension()
+                    .map(|e| e.eq_ignore_ascii_case("cmd"))
+                    .unwrap_or(false)
+            })
+        })
+        .or_else(|| codex_candidates().into_iter().find(|p| p.exists()));
+    *CODEX_EXE_CACHE.lock() = resolved.clone();
+    resolved
+}
+
 fn pwsh_candidates() -> Vec<PathBuf> {
     vec![
         PathBuf::from(r"C:\Program Files\PowerShell\7\pwsh.exe"),

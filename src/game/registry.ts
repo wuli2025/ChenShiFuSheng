@@ -1,27 +1,17 @@
 // 游戏注册表 —— 大厅与播放器据此查找 GameDef。新增游戏只需在此登记。
+// 三条主线剧本:朱元璋(布衣天子)· 马斯克(火星序曲)· 卡尔(无耻浮生);
+// chenshi 为生成式内核(自创剧本入口),非固定故事,保留。
 import type { GameDef } from "./engine";
 import { chenshiGame } from "./games/chenshi";
-import { zhugeliangGame } from "./games/zhugeliang";
-import { sushiGame } from "./games/sushi";
-import { wuzetianGame } from "./games/wuzetian";
-import { zhangqianGame } from "./games/zhangqian";
-import { wangyangmingGame } from "./games/wangyangming";
-import { liqingzhaoGame } from "./games/liqingzhao";
-import { zhengheGame } from "./games/zhenghe";
-import { yingzhengGame } from "./games/yingzheng";
 import { zhuyuanzhangGame } from "./games/zhuyuanzhang";
+import { muskGame } from "./games/musk";
+import { karlGame } from "./games/karl";
 
 export const GAME_DEFS: Record<string, GameDef> = {
   [chenshiGame.id]: chenshiGame,
-  [zhugeliangGame.id]: zhugeliangGame,
-  [sushiGame.id]: sushiGame,
-  [wuzetianGame.id]: wuzetianGame,
-  [zhangqianGame.id]: zhangqianGame,
-  [wangyangmingGame.id]: wangyangmingGame,
-  [liqingzhaoGame.id]: liqingzhaoGame,
-  [zhengheGame.id]: zhengheGame,
-  [yingzhengGame.id]: yingzhengGame,
   [zhuyuanzhangGame.id]: zhuyuanzhangGame,
+  [muskGame.id]: muskGame,
+  [karlGame.id]: karlGame,
 };
 
 export function getGame(id: string | null): GameDef | null {

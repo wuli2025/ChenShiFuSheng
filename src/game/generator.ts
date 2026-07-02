@@ -107,6 +107,9 @@ ${
 ${SCHEMA_HINT}`;
 }
 
+/** 流式空闲超时:超过该时长没有任何 delta/done/error 事件即判定挂起。 */
+const STREAM_IDLE_TIMEOUT = 120_000;
+
 /** 调 LLM 聚合流式输出，直到 done，返回全文。 */
 function runChat(prompt: string, useKb: boolean, onProgress?: ProgressFn): Promise<string> {
   return new Promise<string>(async (resolve, reject) => {
@@ -114,41 +117,62 @@ function runChat(prompt: string, useKb: boolean, onProgress?: ProgressFn): Promi
     let myReqId: string | null = null;
     let settled = false;
     let unlisten: (() => void) | null = null;
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+    // reqId 返回前到达的事件先入队,拿到 reqId 后过滤重放——
+    // 直接累计会把并发中其它请求的流混进来,污染 JSON。
+    const early: ChatStreamEvent[] = [];
+
+    const finish = (err: Error | null) => {
+      if (settled) return;
+      settled = true;
+      if (watchdog) clearTimeout(watchdog);
+      unlisten?.();
+      if (err) reject(err);
+      else resolve(buf);
+    };
+    // 空闲看门狗:流挂起(断连/后端异常不发 done)时不再永久卡住、不再泄漏监听器。
+    const bump = () => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(
+        () => finish(new Error(`生成超时（${STREAM_IDLE_TIMEOUT / 1000} 秒无响应）`)),
+        STREAM_IDLE_TIMEOUT
+      );
+    };
+    const handle = (ev: ChatStreamEvent) => {
+      bump();
+      if (ev.kind === "delta" && ev.text) {
+        buf += ev.text;
+        onProgress?.({ chars: buf.length });
+      } else if (ev.kind === "error") {
+        finish(new Error(ev.text || "生成出错"));
+      } else if (ev.kind === "done") {
+        finish(null);
+      }
+    };
 
     try {
       unlisten = await listen<ChatStreamEvent>("chat:stream", (ev) => {
-        // reqId 拿到前先按 buffer 累计；拿到后只认自己的流
-        if (myReqId && ev.reqId !== myReqId) return;
-        if (ev.kind === "delta" && ev.text) {
-          buf += ev.text;
-          onProgress?.({ chars: buf.length });
-        } else if (ev.kind === "error") {
-          if (!settled) {
-            settled = true;
-            unlisten?.();
-            reject(new Error(ev.text || "生成出错"));
-          }
-        } else if (ev.kind === "done") {
-          if (!settled) {
-            settled = true;
-            unlisten?.();
-            resolve(buf);
-          }
+        if (!myReqId) {
+          early.push(ev);
+          return;
         }
+        if (ev.reqId !== myReqId) return;
+        handle(ev);
       });
 
       onProgress?.({ chars: 0, note: "正在调用模型…" });
+      bump();
       myReqId = await chat.send({
         prompt,
         permissionMode: "manual",
         useKb,
       });
-    } catch (e: any) {
-      if (!settled) {
-        settled = true;
-        unlisten?.();
-        reject(e instanceof Error ? e : new Error(String(e)));
+      // 重放 send 返回前积压的本请求事件
+      for (const ev of early.splice(0)) {
+        if (ev.reqId === myReqId && !settled) handle(ev);
       }
+    } catch (e: any) {
+      finish(e instanceof Error ? e : new Error(String(e)));
     }
   });
 }
@@ -201,6 +225,9 @@ export async function generateGame(
         freeInput: s.freeInput !== false,
         mood: s.mood ? String(s.mood) : undefined,
       };
+      // 模型偶尔给出空 options 且关掉自由输入 → 玩家无任何前进方式(软锁死)。
+      // 兜底:没有选项的场景强制允许自由输入。
+      if (!scenes[id].options.length) scenes[id].freeInput = true;
     }
   }
 

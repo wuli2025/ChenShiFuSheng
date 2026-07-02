@@ -76,3 +76,12 @@ _run_dev.err.log
 # 打包用 claude 自带二进制(234MB, 构建期暂存, 不入库)
 src-tauri/resources/claude-bin/
 src-tauri/tauri.localbuild.conf.json
+
+# codex 出图隔离 home(含 auth.json 令牌副本,勿提交)
+scripts/codex/homes/
+scripts/codex/gen-*.log
+scripts/codex/gen.log
+
+# 临时开发/构建日志(勿提交)
+_build_installer.log
+_dev*.log

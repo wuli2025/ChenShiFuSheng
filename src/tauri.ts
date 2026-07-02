@@ -45,6 +45,18 @@ function authHeaders(): Record<string, string> {
   return t ? { authorization: `Bearer ${t}` } : {};
 }
 
+/** 供其它模块(如生图代理)复用的后端鉴权头。 */
+export function backendAuthHeaders(): Record<string, string> {
+  return authHeaders();
+}
+
+/** 是否运行在「浏览器 + polaris 后端」(Docker/Web)模式。 */
+export async function backendIsHttp(): Promise<boolean> {
+  if (isTauri) return false;
+  await ensureBackend();
+  return backendMode === "http";
+}
+
 /**
  * 受 token 保护的后端文件 URL（Docker/Web 用）。
  * - 默认内联：HTML 在新标签渲染、图片直接显示。
@@ -87,6 +99,9 @@ async function httpInvoke<T>(
     body: JSON.stringify({ cmd, args: args ?? {} }),
   });
   if (!res.ok) {
+    // 轻量后端(Docker lite-server)未实现的命令返回 501 → 回退浏览器 stub,
+    // UI 与纯前端预览一致地降级,而不是满屏报错。
+    if (res.status === 501) return browserStub(cmd, args) as T;
     let msg = `HTTP ${res.status}`;
     try {
       const j = await res.json();
@@ -1120,6 +1135,18 @@ export const provider = {
 };
 
 // ──────────────────────────────────────────────────────────────
+// Agent 引擎切换 module — 整条对话拉起哪个 CLI:codex(默认) / claude
+// 与「供应商坞」正交:provider 决定 claude 用哪家端点;engine 决定用哪个 CLI 进程。
+// ──────────────────────────────────────────────────────────────
+export type EngineKind = "codex" | "claude";
+export const engineApi = {
+  /** 当前生效引擎(默认 codex) */
+  get: () => invoke<EngineKind>("engine_get"),
+  /** 切换引擎,返回最终生效值 */
+  set: (engine: EngineKind) => invoke<EngineKind>("engine_set", { engine }),
+};
+
+// ──────────────────────────────────────────────────────────────
 // 环境医生 module — 新用户「环境监测 + 配置安装」(claude / pwsh / PATH)
 // ──────────────────────────────────────────────────────────────
 export interface ToolStatus {
@@ -1483,6 +1510,10 @@ function browserStub(cmd: string, _args?: Record<string, unknown>): unknown {
       return { status: "ok" };
     case "codex_proxy_info":
       return { running: false, port: 0, lastError: "" };
+    case "engine_get":
+      return "codex";
+    case "engine_set":
+      return (_args?.engine as string) ?? "codex";
     case "env_check": {
       const tool = (key: string, name: string, found: boolean, required = false): ToolStatus => ({
         key: key as ToolStatus["key"],

@@ -3,7 +3,7 @@
 // 移植《人生重开模拟器》式「草根逆袭 + 随机历练流 + 阶层跃迁」:中段以 event 模拟人生随机事件流被动改属性,
 // 关键转折(投军、鄱阳决战、称帝、杀功臣)给重抉择。基调苍劲跌宕、文白相间、第二人称「你」、墨蓝水墨,绝不用 emoji。
 // 四维属性 0–100:势力 / 武略 / 民心 / 猜忌;「猜忌」过高导向「火烧功臣」黑暗结局,是道德张力。
-import type { GameDef, Scene, Stats } from "../engine";
+import type { GameDef, Scene, Stats, WeightedEnding } from "../engine";
 import { inkArt } from "./ink-art";
 
 const INITIAL: Stats = { 势力: 5, 武略: 18, 民心: 30, 猜忌: 8 };
@@ -27,12 +27,16 @@ const SCENES: Record<string, Scene> = {
         text: "把牛尾插进山石缝,谎称牛钻地遁去——一肩担下,护住伙伴",
         hint: "民心 +,武略 +",
         effects: { 民心: 10, 武略: 6, 势力: 2 },
+        caps: { 决断: 8, 统御: 6, 仁德: 4 },
+        tags: ["一肩担责", "护佑同伴", "临事急智"],
         next: "z_plague_in",
       },
       {
         text: "低头认罚,任刘德毒打,从此愈发隐忍寡言",
         hint: "民心 +,猜忌 +",
         effects: { 民心: 4, 猜忌: 6, 武略: 2 },
+        caps: { 隐忍: 9, 猜防: 5 },
+        tags: ["逆来顺受", "深藏隐忍"],
         next: "z_plague_in",
       },
     ],
@@ -109,6 +113,7 @@ const SCENES: Record<string, Scene> = {
     ],
     event: {
       effects: { 武略: 12, 民心: 10, 势力: 2 },
+      caps: { 谋略: 8, 隐忍: 7 },
       note: "三年游食,遍识淮西山川人心 —— 武略 +12,民心 +10",
     },
     next: "z_join_in",
@@ -133,12 +138,16 @@ const SCENES: Record<string, Scene> = {
         text: "投郭子兴麾下,执枪为卒——纵死,也要死在搏命的路上",
         hint: "势力 +,武略 +",
         effects: { 势力: 12, 武略: 12, 民心: 4 },
+        caps: { 决断: 11, 统御: 5, 谋略: 3 },
+        tags: ["孤注一掷", "投身行伍"],
         next: "z_marry_in",
       },
       {
         text: "暂避兵锋,潜回乡里观望,待局势明朗再图",
         hint: "猜忌 +,势力 −",
         effects: { 猜忌: 8, 势力: -4, 武略: 4 },
+        caps: { 隐忍: 7, 猜防: 8, 谋略: 3 },
+        tags: ["静观待变", "审慎避险"],
         next: "z_marry_in",
       },
     ],
@@ -180,6 +189,7 @@ const SCENES: Record<string, Scene> = {
     ],
     event: {
       effects: { 势力: 16, 民心: 12, 武略: 6 },
+      caps: { 统御: 11, 仁德: 4 },
       note: "招贤纳士,徐达李善长来归 —— 势力 +16,民心 +12",
     },
     next: "z_jiqing_event",
@@ -200,6 +210,7 @@ const SCENES: Record<string, Scene> = {
     ],
     event: {
       effects: { 势力: 14, 武略: 8, 猜忌: 2 },
+      caps: { 谋略: 11, 隐忍: 6 },
       note: "据应天,纳「缓称王」之策 —— 势力 +14,武略 +8",
     },
     footnote: "史载:朱升献策「高筑墙,广积粮,缓称王」,太祖善之。",
@@ -225,12 +236,16 @@ const SCENES: Record<string, Scene> = {
         text: "效赤壁故事,候东北风起,纵火焚其连舟巨舰",
         hint: "武略 ++,势力 +",
         effects: { 武略: 18, 势力: 12, 民心: 4 },
+        caps: { 谋略: 12, 决断: 8, 统御: 4 },
+        tags: ["火攻奇谋", "果决决战"],
         next: "z_poyang_win",
       },
       {
         text: "分舟为队,轮番冲突;先扼湖口,断其归路,困而后击",
         hint: "武略 +,猜忌 +",
         effects: { 武略: 12, 势力: 10, 猜忌: 4 },
+        caps: { 谋略: 8, 隐忍: 5, 统御: 4 },
+        tags: ["稳扎稳打", "困敌之策"],
         next: "z_poyang_win",
       },
     ],
@@ -295,12 +310,16 @@ const SCENES: Record<string, Scene> = {
         text: "「驱逐胡虏,恢复中华」——以华夏正统立国,收尽天下人心",
         hint: "民心 ++,势力 +",
         effects: { 民心: 18, 势力: 12, 武略: 4 },
+        caps: { 仁德: 8, 统御: 8, 谋略: 5 },
+        tags: ["民族大义", "收揽人心"],
         next: "z_north_win",
       },
       {
         text: "宣谕中原父老:凡元之官民来归者皆抚之,胡人愿留者亦待以汉礼",
         hint: "民心 +,势力 +",
         effects: { 民心: 12, 势力: 10, 猜忌: 2 },
+        caps: { 仁德: 11, 谋略: 5 },
+        tags: ["怀柔包容", "以德服人"],
         next: "z_north_win",
       },
     ],
@@ -344,18 +363,24 @@ const SCENES: Record<string, Scene> = {
         text: "立纲陈纪,与功臣共守富贵;颁铁券,期以子孙世世相保",
         hint: "民心 ++,猜忌 −",
         effects: { 民心: 16, 猜忌: -8, 势力: 8 },
+        caps: { 仁德: 12, 统御: 8 },
+        tags: ["与臣共富贵", "厚待功臣"],
         next: "z_late_event",
       },
       {
         text: "杯酒未必能释兵权——重设锦衣卫,密察百官,以猜防固皇权",
         hint: "势力 +,猜忌 ++",
         effects: { 势力: 12, 猜忌: 22, 民心: -4 },
+        caps: { 猜防: 15, 决断: 4 },
+        tags: ["特务密察", "以猜固权"],
         next: "z_late_event",
       },
       {
         text: "罢中书省、废丞相,大权独揽于一身,事必躬亲",
         hint: "势力 ++,猜忌 +",
         effects: { 势力: 16, 猜忌: 12, 民心: 2 },
+        caps: { 决断: 9, 统御: 6, 猜防: 8 },
+        tags: ["大权独揽", "事必躬亲"],
         next: "z_late_event",
       },
     ],
@@ -376,6 +401,7 @@ const SCENES: Record<string, Scene> = {
     ],
     event: {
       effects: { 民心: 8, 猜忌: 14, 势力: 4 },
+      caps: { 猜防: 9, 统御: 4 },
       note: "洪武之治,然太子早殇、屡兴大狱 —— 民心 +8,猜忌 +14",
     },
     footnote: "史载:洪武二十五年,皇太子标薨,帝恸甚,虑诸将难制。",
@@ -401,18 +427,24 @@ const SCENES: Record<string, Scene> = {
         text: "兴蓝玉大狱,牵连诛戮,功臣宿将一网打尽,为子孙除荆棘",
         hint: "势力 +,猜忌 +++,民心 −",
         effects: { 猜忌: 28, 势力: 10, 民心: -16 },
+        caps: { 猜防: 20, 决断: 6 },
+        tags: ["屠戮功臣", "为子孙除荆棘"],
         next: "z_last_in",
       },
       {
         text: "止于元凶,薄惩其党,留徐达汤和等老臣善终,稍存恩义",
         hint: "民心 +,猜忌 −",
         effects: { 民心: 14, 猜忌: -10, 势力: 4 },
+        caps: { 仁德: 8, 谋略: 6, 隐忍: 5 },
+        tags: ["适可而止", "稍存恩义"],
         next: "z_last_in",
       },
       {
         text: "顾念布衣患难之情,下罪己之诏,放归功臣田里,与之始终",
         hint: "民心 ++,猜忌 −−",
         effects: { 民心: 20, 猜忌: -20, 势力: -2 },
+        caps: { 仁德: 16, 隐忍: 6 },
+        tags: ["罪己宽仁", "与功臣始终"],
         next: "z_last_in",
       },
     ],
@@ -511,6 +543,52 @@ function judge(s: Stats): { title: string; verse: string } {
   };
 }
 
+// 加权结局列表 —— 仅供结局后「命运岔口」近失可视化;实际结局标题以 judge() 为准。
+const ENDINGS: WeightedEnding[] = [
+  {
+    id: "huoshao",
+    title: "火烧功臣",
+    verse: "庆功楼火,照尽淮西旧勋之骨。\n孤家寡人坐拥江山,身后唯余猜雄之名。",
+    weight: "猜忌*2.2",
+  },
+  {
+    id: "baoqin",
+    title: "暴秦之续",
+    verse: "剥皮实草,大狱连兴,刑名峻急如秦。\n海内虽定,而恩义已薄,后世讥其寡恩。",
+    weight: "猜忌*1.6 + (70 - 民心)",
+  },
+  {
+    id: "hongwu",
+    title: "洪武开国",
+    verse: "提三尺剑,削平群雄,驱逐胡元。\n布衣而有天下,得国之正,无出其右。",
+    weight: "势力 + 武略 + 民心 - 猜忌*0.6",
+  },
+  {
+    id: "quzhu",
+    title: "驱逐胡虏",
+    verse: "恢复中华,衣冠重归于故都。\n四百年膻腥一洗,功在社稷,泽被苍生。",
+    weight: "民心*1.4 + 武略 - 猜忌*0.4",
+  },
+  {
+    id: "buyi",
+    title: "布衣天子",
+    verse: "放牛乞食起淮西,未改赤子之心。\n与功臣共富贵,以仁厚传于子孙。",
+    weight: "民心*1.6 - 猜忌*0.8",
+  },
+  {
+    id: "mashang",
+    title: "马上得国",
+    verse: "鄱阳焚舰,平江困城,北逐元主。\n戎马半生而成帝业,武略冠绝一时。",
+    weight: "势力 + 武略*1.2 - 民心*0.2",
+  },
+  {
+    id: "mogou",
+    title: "殁于沟壑",
+    verse: "淮右饥荒,孤身游食于风雨之中。\n时也命也,英雄未及拔剑,已委身于荒草。",
+    weight: "150 - 势力 - 武略 - 民心",
+  },
+];
+
 export const zhuyuanzhangGame: GameDef = {
   id: "zhuyuanzhang",
   start: "z_start",
@@ -521,6 +599,25 @@ export const zhuyuanzhangGame: GameDef = {
     { key: "民心", color: "#b7c2a8" },
     { key: "猜忌", color: "#9a8fb0" },
   ],
+  caps: [
+    { key: "决断", label: "决断", color: "#c98b6b" },
+    { key: "隐忍", label: "隐忍", color: "#9a8fb0" },
+    { key: "仁德", label: "仁德", color: "#b7c2a8" },
+    { key: "谋略", label: "谋略", color: "#c9a86b" },
+    { key: "统御", label: "统御", color: "#8aa2b8" },
+    { key: "猜防", label: "猜防", color: "#9e3b32" },
+  ],
+  initialCaps: { 决断: 12, 隐忍: 20, 仁德: 24, 谋略: 12, 统御: 8, 猜防: 8 },
+  endings: ENDINGS,
+  career: false,
+  diagnoseByCap: {
+    决断: "「你一生在岔路前总要掷珓问卜——若连自己都信不过，又凭什么号令万军？」",
+    隐忍: "「锋芒太露者先折。你忍得过饥荒乞食，忍得过这满朝的明枪暗箭吗？」",
+    仁德: "「你打江山时说不杀降、不掠民——坐了龙椅，那个放牛娃还在吗？」",
+    谋略: "「光有一身武勇成不了帝业。高筑墙、缓称王的远略，你可曾真懂？」",
+    统御: "「徐达李善长肯为你死，是因敬你还是惧你？驭人若只剩一个怕字，便是孤家寡人。」",
+    猜防: "「你夜夜梦见身后江山易主，于是举起了屠刀——可猜疑这把刀，最先割的是自己的心。」",
+  },
   scenes: SCENES,
   judge,
   theme: {

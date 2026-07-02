@@ -28,6 +28,9 @@ const video = scan(VIDEO_DIR, ".mp4", "/story-video");
 
 const out = `// 自动生成 —— 请勿手改。由 scripts/stepfun/build-manifest.mjs 扫描 public/story-art 与 public/story-voice 产出。
 // 键: "<gameId>/<sceneId>" → 静态资源根路径。GameView/playModel 据此把真实配图与旁白配音挂到场景上。
+// artFor/voiceFor/videoFor 经 assetUrl() 解析:设了 CDN 基址走远程托管,否则用本地 public/ 路径。
+import { assetUrl } from "./assets";
+
 export const ART: Record<string, string> = ${JSON.stringify(art, null, 2)};
 
 export const VOICE: Record<string, string> = ${JSON.stringify(voice, null, 2)};
@@ -35,13 +38,13 @@ export const VOICE: Record<string, string> = ${JSON.stringify(voice, null, 2)};
 export const VIDEO: Record<string, string> = ${JSON.stringify(video, null, 2)};
 
 export function artFor(gameId: string, sceneId: string): string | undefined {
-  return ART[gameId + "/" + sceneId];
+  return assetUrl(ART[gameId + "/" + sceneId]);
 }
 export function voiceFor(gameId: string, sceneId: string): string | undefined {
-  return VOICE[gameId + "/" + sceneId];
+  return assetUrl(VOICE[gameId + "/" + sceneId]);
 }
 export function videoFor(gameId: string, sceneId: string): string | undefined {
-  return VIDEO[gameId + "/" + sceneId];
+  return assetUrl(VIDEO[gameId + "/" + sceneId]);
 }
 `;
 

@@ -6,6 +6,7 @@ import GameView from "./GameView.vue";
 import GameCreate from "./GameCreate.vue";
 import GameLibrary from "./GameLibrary.vue";
 import GameGallery from "./GameGallery.vue";
+import GameTemplates from "./GameTemplates.vue";
 import GameSettings from "./GameSettings.vue";
 import GameExternal from "./GameExternal.vue";
 import WarmAura from "./WarmAura.vue";
@@ -26,6 +27,7 @@ import WarmAura from "./WarmAura.vue";
         <GameCreate v-else-if="platform.screen === 'create'" key="create" />
         <GameLibrary v-else-if="platform.screen === 'library'" key="library" />
         <GameGallery v-else-if="platform.screen === 'gallery'" key="gallery" />
+        <GameTemplates v-else-if="platform.screen === 'templates'" key="templates" />
         <GameSettings v-else-if="platform.screen === 'settings'" key="settings" />
         <GameExternal v-else-if="platform.screen === 'external'" key="external" />
         <!-- 体验：内置精修剧本与 AI 生成剧本统一走沉浸式播放器 GameView -->

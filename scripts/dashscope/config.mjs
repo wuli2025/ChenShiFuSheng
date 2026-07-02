@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, "..", "..");
 
-export const DASH_KEY = process.env.DASHSCOPE_KEY || "sk-ca3639e450044a23ae5c84045dd2ca11";
+// key 只从环境变量读,不给硬编码兜底(硬编码等于把密钥提交进仓库)。缺失时立即报错退出。
+export const DASH_KEY = process.env.DASHSCOPE_KEY || "";
+if (!DASH_KEY) {
+  console.error("缺少环境变量 DASHSCOPE_KEY（阿里云 DashScope API Key）");
+  process.exit(1);
+}
 
 export const BASE = "https://dashscope.aliyuncs.com/api/v1";
 export const SYNTH_URL = `${BASE}/services/aigc/video-generation/video-synthesis`;

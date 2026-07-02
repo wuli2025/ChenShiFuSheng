@@ -59,13 +59,19 @@ export interface ImageCfg {
 
 const KEY = "polaris.game.image.v1";
 
-// 默认接入阶跃星辰:开箱即用,生成式游戏直接走 StepFun 出图。
+// 默认接入阶跃星辰。默认 key 只从构建期环境变量注入(.env.local 里配
+// VITE_STEPFUN_API_KEY)——绝不能把真实 key 硬编码进源码/仓库:前端产物里的
+// key 任何人都能提取盗刷。没注入 key 时默认关闭,用户在设置里自己填。
+const DEFAULT_KEY = String(
+  (import.meta as any).env?.VITE_STEPFUN_API_KEY || ""
+).trim();
+
 const DEFAULT_CFG: ImageCfg = {
   preset: "stepfun",
   endpoint: "https://api.stepfun.com/v1/images/generations",
-  apiKey: "1AJREc19rwAzI9EItOIFAPB2UZZjjrGrAepmho62ikiWoLXyr5ntKsVzh4JyrQfFC",
+  apiKey: DEFAULT_KEY,
   model: "step-1x-medium",
-  enabled: true,
+  enabled: !!DEFAULT_KEY,
 };
 
 export function getImageCfg(): ImageCfg {
