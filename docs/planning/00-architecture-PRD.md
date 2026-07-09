@@ -4,20 +4,25 @@
 
 ---
 
-## 1. 板块化架构 (Phase 0–5)
+## 1. 后端架构状态
 
-### 1.1 当前状态 (Phase 0–1 已完成)
+### 1.1 当前实现（2026-07）
 
 ```
 src-tauri/
-├─ Cargo.toml              [workspace] — host 仅装配
-├─ src/                    host 层：chat / claude_md / conv / kb / lib.rs
-└─ crates/
-   ├─ polaris-core/        契约 crate：DTO + trait，零依赖
-   └─ polaris-sandbox/     板块⑤：命令实现 + Dockerfile 模板
+├─ Cargo.toml              [workspace] — 当前 members = []
+└─ src/                    单包实现：chat / claude_md / conv / kb / provider / skills / voice / lib.rs
 ```
 
-### 1.2 依赖规则
+当前 fork 已收敛为「游戏平台桌面壳单包」。历史上的 `polaris-core` / `polaris-sandbox`
+拆分目标没有保留在当前代码树里，不能再按 `cargo test -p polaris-sandbox` 这类命令理解现状。
+
+当前硬约束：
+- `src-tauri/src/lib.rs` 的 `tauri::generate_handler![...]` 是桌面端命令注册权威来源。
+- `src/tauri.ts` 的 typed wrapper 是前端调用边界；已剥离模块必须进入 `STRIPPED_COMMANDS` 降级集合。
+- `npm run check:contract` 会校验前端 `invoke(...)`、Rust 注册命令和剥离命令集合是否一致。
+
+### 1.2 后续拆分目标
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -39,7 +44,9 @@ src-tauri/
 - **polaris-sandbox**：依赖 `polaris-core`，通过 `KbLocator` trait 获取 KB 根路径（不硬调 `kb::kb_root()`）
 - **host (polaris-app)**：依赖 `polaris-core` + `polaris-sandbox`，启动时注入 `Arc<dyn KbLocator>`
 
-### 1.3 依赖反转落地方式
+> 上图是后续重新拆 crate 时的目标边界，不代表当前目录结构。
+
+### 1.3 依赖反转目标方式
 
 ```rust
 // host (lib.rs) 启动时注入
@@ -50,18 +57,18 @@ let locator: State<Arc<dyn KbLocator>> = app.state();
 let kb_root = locator.root();
 ```
 
-### 1.4 待完成路线图
+### 1.4 路线图
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
-| 0 | Cargo workspace 建立 | ✅ |
-| 1 | 提取 polaris-core + polaris-sandbox | ✅ |
-| 2 | 提取 polaris-kb | ⏳ |
-| 3 | 提取 polaris-conv | ⏳ |
-| 4 | 提取 polaris-chat | ⏳ |
-| 5 | 提取 polaris-claude-md | ⏳ |
+| 0 | 单包桌面壳稳定化 | ✅ |
+| 1 | 命令契约检查进入 CI | ✅ |
+| 2 | 提取 polaris-core 契约 crate | ⏳ |
+| 3 | 提取 polaris-kb / polaris-conv | ⏳ |
+| 4 | 提取 polaris-chat / polaris-claude-md | ⏳ |
+| 5 | 按 feature 恢复或删除已剥离模块 | ⏳ |
 
-> Phase 2–5 建议随功能演进推进，不必专门停下来重构。
+> Phase 2–5 建议随功能演进推进；在拆分前，先保持单包边界清晰、命令契约可自动验证。
 
 ---
 
@@ -164,11 +171,15 @@ npm run tauri:build    # Release 模式，走 profile.release 优化
 
 输出：`src-tauri/target/release/bundle/nsis/Polaris_*.exe`
 
-### 4.3 独立测试
+### 4.3 质量门
 
 ```bash
-cargo test -p polaris-sandbox    # 不拉起整个 app，板块独立测试
-cargo check --workspace          # 全 workspace 类型检查
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+npm run build
+npm run check:contract
+npm run audit:prod
 ```
 
 ---
@@ -178,7 +189,7 @@ cargo check --workspace          # 全 workspace 类型检查
 | 坑 | 场景 | 解法 |
 |----|------|------|
 | `#[tauri::command]` 不能放 lib.rs 根 | crate 的 lib.rs 直接写命令函数 | 命令放子模块（如 `commands.rs`），lib.rs 只做 `pub mod` + 再导出 |
-| Tauri 插件在 workspace crate 中注册 | polaris-sandbox 需要暴露命令给 host | 命令在 crate 内定义，host 的 `lib.rs` 通过 `tauri::generate_handler![]` 注册 |
+| Tauri 命令边界漂移 | 前端 wrapper 调了未注册命令 | `npm run check:contract` 校验 `invoke(...)` / `generate_handler![]` / `STRIPPED_COMMANDS` |
 
 ---
 

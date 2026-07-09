@@ -8,7 +8,6 @@ dist-ssr
 .DS_Store
 src-tauri/target
 src-tauri/gen
-src-tauri/Cargo.lock
 
 # Runtime outputs / local logs
 .dev.log
@@ -85,3 +84,4 @@ scripts/codex/gen.log
 # 临时开发/构建日志(勿提交)
 _build_installer.log
 _dev*.log
+.env.prod

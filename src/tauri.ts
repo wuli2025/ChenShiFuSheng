@@ -16,6 +16,64 @@ export const isTauri =
   // @ts-ignore tauri injects this
   typeof (window as any).__TAURI_INTERNALS__ !== "undefined";
 
+export const STRIPPED_COMMANDS = new Set<string>([
+  "codex_proxy_info",
+  "cube_config_get",
+  "cube_config_set",
+  "cube_status",
+  "fable_index_start",
+  "fable_inventory_start",
+  "fable_search",
+  "feishu_create_qr",
+  "feishu_gateway_start",
+  "feishu_gateway_status",
+  "feishu_gateway_stop",
+  "feishu_get_config",
+  "feishu_open_console",
+  "feishu_set_config",
+  "feishu_test_connection",
+  "file_cluster_build",
+  "file_cluster_llm",
+  "file_cluster_model_get",
+  "file_cluster_model_set",
+  "file_gist",
+  "file_grid",
+  "file_overview",
+  "file_thumb",
+  "file_warm_thumbs",
+  "forge_deck_to_pptx",
+  "forge_spec_to_pptx",
+  "media_account_forget",
+  "media_accounts_status",
+  "persona_apply",
+  "persona_list",
+  "project_list",
+  "project_run",
+  "project_status",
+  "project_stop",
+  "sandbox_build_image",
+  "sandbox_exec",
+  "sandbox_start",
+  "sandbox_status",
+  "sandbox_stop",
+  "scan_resources",
+  "scan_roots",
+  "echo_dream_now",
+  "echo_set",
+  "echo_status",
+  "fable_cancel",
+  "fable_status",
+  "sense_list",
+  "sense_pack_install",
+  "sense_pack_remove",
+  "sense_set",
+  "sense_switches_set",
+  "sense_test",
+  "wecom_scan_create",
+]);
+
+const STRIPPED_BACKEND_MESSAGE = "该功能在游戏平台版中未接入后端";
+
 // ──────────────────────────────────────────────────────────────
 // Docker/Web 后端适配层
 // ──────────────────────────────────────────────────────────────
@@ -190,7 +248,10 @@ function ensureWs(): void {
 }
 
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri) return rawInvoke<T>(cmd, args);
+  if (isTauri) {
+    if (STRIPPED_COMMANDS.has(cmd)) return browserStub(cmd, args) as T;
+    return rawInvoke<T>(cmd, args);
+  }
   await ensureBackend();
   if (backendMode === "http") return httpInvoke<T>(cmd, args);
   // 纯前端预览：返回 stub 数据让 UI 仍可浏览。
@@ -1230,6 +1291,14 @@ export const envDoctor = {
 // ──────────────────────────────────────────────────────────────
 // Browser stubs (when running in plain `npm run dev` without Tauri)
 // ──────────────────────────────────────────────────────────────
+function strippedStubNote(browserNote = "(browser stub)"): string {
+  return isTauri ? STRIPPED_BACKEND_MESSAGE : browserNote;
+}
+
+function strippedStubError(browserMessage: string): Error {
+  return new Error(isTauri ? STRIPPED_BACKEND_MESSAGE : browserMessage);
+}
+
 function browserStub(cmd: string, _args?: Record<string, unknown>): unknown {
   switch (cmd) {
     case "kb_scan":
@@ -1296,6 +1365,148 @@ function browserStub(cmd: string, _args?: Record<string, unknown>): unknown {
       return "(browser-only)";
     case "kb_set_root":
       return 0;
+    case "scan_roots":
+      return [];
+    case "scan_resources":
+      return {
+        rows: [],
+        totalSeen: 0,
+        hit: 0,
+        skipped: 0,
+        truncated: false,
+      };
+    case "media_accounts_status":
+      return [
+        {
+          platform: "wechat",
+          label: "微信公众号",
+          bound: false,
+          profileDir: "",
+          lastActive: null,
+          detail: strippedStubNote("浏览器模式无账号探测能力"),
+        },
+        {
+          platform: "xhs",
+          label: "小红书",
+          bound: false,
+          profileDir: "",
+          lastActive: null,
+          detail: strippedStubNote("浏览器模式无账号探测能力"),
+        },
+      ];
+    case "media_account_forget":
+      return strippedStubNote();
+    case "file_overview":
+      return {
+        roots: [],
+        activeRoot: null,
+        totalFiles: 0,
+        totalBytes: 0,
+        byKind: [],
+        clusters: [],
+        textFiles: 0,
+        embeddedFiles: 0,
+        hasEmbedProvider: false,
+        clustered: false,
+        scanning: false,
+        indexing: false,
+      };
+    case "file_grid":
+      return {
+        items: [],
+        total: 0,
+        page: Number(_args?.page ?? 0),
+        pageSize: Number(_args?.pageSize ?? 60),
+      };
+    case "file_thumb":
+      return null;
+    case "file_gist":
+      return strippedStubNote("浏览器模式无后端，无法生成速览。");
+    case "file_cluster_build":
+      return {
+        clusters: 0,
+        files: 0,
+        seconds: 0,
+        note: strippedStubNote("浏览器模式无文件聚类能力"),
+      };
+    case "file_cluster_llm":
+      return undefined;
+    case "file_cluster_model_get":
+      return { enabled: false, baseUrl: "", model: "", keySet: false };
+    case "file_cluster_model_set":
+      return {
+        enabled: Boolean(_args?.enabled ?? false),
+        baseUrl: String(_args?.baseUrl ?? ""),
+        model: String(_args?.model ?? ""),
+        keySet: Boolean(_args?.apiKey),
+      };
+    case "file_warm_thumbs":
+      return 0;
+    case "fable_inventory_start":
+    case "fable_index_start":
+      return undefined;
+    case "fable_cancel":
+      return undefined;
+    case "fable_status":
+      return {
+        db_path: "",
+        roots: [],
+        files_total: 0,
+        text_files: 0,
+        chunks_total: 0,
+        embedded_files: 0,
+        pending_files: 0,
+        scanning: false,
+        indexing: false,
+        embed_provider: null,
+        cli_path: null,
+      };
+    case "fable_search":
+      return {
+        query: String(_args?.query ?? ""),
+        mode: String(_args?.mode ?? "hybrid"),
+        hits: [],
+        grepHits: 0,
+        vectorHits: 0,
+        reranked: false,
+        grepTruncated: false,
+        ms: 0,
+      };
+    case "sense_list":
+    case "sense_set":
+    case "sense_switches_set":
+      return {
+        groups: [],
+        switches: {
+          cloud_enabled: false,
+          audio_egress: false,
+          image_egress: false,
+          budget_monthly_cny: 0,
+        },
+        packs: [],
+        models_dir: "",
+      };
+    case "sense_test":
+      return { ok: false, latency_ms: 0, message: strippedStubNote("浏览器模式无感官 API 后端") };
+    case "sense_pack_install":
+    case "sense_pack_remove":
+      return undefined;
+    case "echo_status":
+    case "echo_set":
+      return {
+        enabled: false,
+        hour: 3,
+        last_dream_day: "",
+        dreaming: false,
+        memory_count: 0,
+        log: [],
+      };
+    case "echo_dream_now":
+      return undefined;
+    case "forge_deck_to_pptx":
+      return { ok: false, warnings: [STRIPPED_BACKEND_MESSAGE] };
+    case "forge_spec_to_pptx":
+      return { ok: false, slides: 0, warnings: [STRIPPED_BACKEND_MESSAGE] };
     case "sandbox_status":
       return {
         docker_installed: false,
@@ -1450,11 +1661,11 @@ function browserStub(cmd: string, _args?: Record<string, unknown>): unknown {
     case "feishu_open_console":
       return undefined;
     case "wecom_scan_create":
-      throw new Error("浏览器模式无法扫码创建，请在桌面应用中操作。");
+      throw strippedStubError("浏览器模式无法扫码创建，请在桌面应用中操作。");
     case "feishu_gateway_status":
       return { running: false };
     case "feishu_gateway_start":
-      throw new Error("浏览器模式无法启动网关，请在桌面应用中操作。");
+      throw strippedStubError("浏览器模式无法启动网关，请在桌面应用中操作。");
     case "feishu_gateway_stop":
       return undefined;
     case "persona_list":

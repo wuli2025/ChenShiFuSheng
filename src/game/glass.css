@@ -1,0 +1,94 @@
+/* ────────────────────────────────────────────────────────────────
+ * 琉璃设计系统 —— 游戏平台全局设计令牌 (Apple liquid-glass × 墨蓝夜色)
+ * 只定义变量与少量全局工艺类;各组件 scoped 样式引用这些令牌,
+ * 保证 8 个屏幕 + 播放器是"同一块玻璃"切出来的。
+ * 与「创作工坊(画布引擎工作台)」同一套视觉语言:墨蓝极光底 + 琉璃金点缀。
+ * ──────────────────────────────────────────────────────────────── */
+:root {
+  /* 玻璃基材:墨蓝夜色的半透明底,配大半径 blur + 提饱和,后景极光透出琉璃感 */
+  --g-blur: 26px;
+  --g-sat: 150%;
+  --glass: rgba(16, 24, 38, 0.46);
+  --glass-strong: rgba(11, 17, 28, 0.66); /* 浮层/面板,底噪更足 */
+  --glass-soft: rgba(24, 34, 52, 0.3); /* 卡片,更透 */
+  --glass-press: rgba(34, 48, 70, 0.52); /* 按压/选中 */
+
+  /* 发丝线 + 顶缘高光:玻璃的"厚度"来自这两笔 */
+  --hairline: rgba(226, 238, 252, 0.09);
+  --hairline-strong: rgba(226, 238, 252, 0.17);
+  --edge-hi: inset 0 1px 0 rgba(232, 242, 252, 0.1);
+  --edge-hi-strong: inset 0 1px 0 rgba(232, 242, 252, 0.17);
+
+  /* 投影层级 */
+  --shadow-sm: 0 4px 18px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 12px 44px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.6);
+
+  /* 主题色:琉璃金(与工作台同源),辅以墨蓝 */
+  --accent: #e3b341;
+  --accent-deep: #c9992b;
+  --gold: #e3b341;
+  --accent-glow: rgba(227, 179, 65, 0.32);
+
+  /* 文字四级 */
+  --text-hi: #eef4fb;
+  --text: #cdd8e6;
+  --text-mut: #93a5bb;
+  --text-dim: #66788f;
+
+  /* 连续圆角尺 */
+  --r-xl: 26px;
+  --r-lg: 20px;
+  --r-md: 14px;
+  --r-sm: 10px;
+  --r-pill: 999px;
+
+  /* 动效:苹果式弹性缓动 */
+  --ease: cubic-bezier(0.32, 0.72, 0.24, 1);
+  --dur: 0.28s;
+
+  /* 字族 */
+  --f-serif: "Songti SC", "SimSun", serif;
+  --f-sans: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* 玻璃面:三档厚度,组件模板直接挂类 */
+.glass,
+.glass-soft,
+.glass-strong {
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border: 1px solid var(--hairline);
+}
+.glass {
+  background: var(--glass);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
+}
+.glass-soft {
+  background: var(--glass-soft);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
+}
+.glass-strong {
+  background: var(--glass-strong);
+  border-color: var(--hairline-strong);
+  box-shadow: var(--edge-hi-strong), var(--shadow-md);
+}
+
+/* 细雅滚动条:通铺游戏平台 */
+.platform *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.platform *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.platform *::-webkit-scrollbar-thumb {
+  background: rgba(226, 238, 252, 0.12);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.platform *::-webkit-scrollbar-thumb:hover {
+  background: rgba(226, 238, 252, 0.22);
+  background-clip: content-box;
+}

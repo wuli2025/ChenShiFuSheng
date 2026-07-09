@@ -1,0 +1,107 @@
+{
+  "meta": { "title": "星语拾光", "styleHint": "现代插画", "cover": "art/bg_sea.jpg" },
+  "stats": [
+    { "id": "tech",   "name": "技术", "init": 8,  "max": 20 },
+    { "id": "mind",   "name": "心态", "init": 10, "max": 20 },
+    { "id": "health", "name": "健康", "init": 12, "max": 20 },
+    { "id": "fame",   "name": "声望", "init": 6,  "max": 20 }
+  ],
+  "rerolls": 2,
+  "start": "sc_office",
+  "assets": {
+    "bg_office": "art/bg_office.jpg",
+    "bg_garden": "art/bg_garden.jpg",
+    "bg_sea":    "art/bg_sea.jpg",
+    "hero":      "art/hero_idle.png",
+    "hero_talk": "art/hero_talk.png",
+    "girl":      "art/girl_idle.png"
+  },
+  "scenes": {
+    "sc_office": {
+      "bg": "bg_office", "weather": null, "filter": null,
+      "beats": [
+        { "who": "旁白", "text": "凌晨两点,实验室的灯还亮着。第四十七次训练,损失曲线终于肯往下走了。" },
+        { "who": "林一", "spr": "hero", "chars": [{ "id": "hero", "img": "hero_talk", "x": 68, "enter": "right" }],
+          "text": "再等等……这一次,它真的在学习。", "fx": { "tech": 2 } },
+        { "who": "苏晚", "spr": "girl",
+          "chars": [{ "id": "hero", "img": "hero_idle", "x": 70 }, { "id": "girl", "img": "girl", "x": 30, "enter": "left" }],
+          "text": "这么晚了,你还没走?", "cam": { "zoom": 1.06, "panX": 2 } },
+        { "who": "苏晚", "spr": "girl",
+          "chars": [{ "id": "hero", "img": "hero_idle", "x": 70 }, { "id": "girl", "img": "girl", "x": 34 }],
+          "text": "……如果这条曲线是真的,明天整个行业都会睡不着觉。", "hl": "night_talk" }
+      ],
+      "choice": {
+        "opts": [
+          { "t": "现在就发预印本,抢下首发", "dice": { "diff": 7, "bonus": "tech", "okTo": "sc_fame", "koTo": "sc_burn" },
+            "fx": { "health": -2 } },
+          { "t": "再验证一周,稳一点", "to": "sc_garden", "fx": { "mind": 2, "tech": 1 } },
+          { "t": "拉苏晚合著,共享成果", "req": { "fame": 8 }, "to": "sc_fame", "fx": { "fame": 3, "mind": 1 } }
+        ]
+      }
+    },
+    "sc_garden": {
+      "bg": "bg_garden", "weather": "petal", "bgm": null,
+      "beats": [
+        { "who": "旁白", "text": "一周后。花园里落樱簌簌,验证集的曲线依旧漂亮。", "cam": { "zoom": 1 } },
+        { "who": "苏晚", "spr": "girl", "chars": [{ "id": "girl", "img": "girl", "x": 32, "enter": "left" }],
+          "text": "你说,我们当年拼了命追的东西,现在它自己会跑了,那我们算什么?", "filter": "dream" },
+        { "who": "林一", "spr": "hero",
+          "chars": [{ "id": "girl", "img": "girl", "x": 26 }, { "id": "hero", "img": "hero_talk", "x": 72, "enter": "right" }],
+          "text": "算点火的人。", "filter": null, "fx": { "mind": 2 } }
+      ],
+      "next": "sc_sea"
+    },
+    "sc_burn": {
+      "bg": "bg_office", "filter": "gray", "weather": "rain",
+      "beats": [
+        { "who": "旁白", "text": "预印本发出去三小时,复现失败的帖子冲上了热榜。", "cam": { "shake": "mid" }, "fx": { "mind": -4, "fame": -3 } },
+        { "who": "林一", "spr": "hero", "chars": [{ "id": "hero", "img": "hero_idle", "x": 50, "enter": "fade" }],
+          "text": "……是我太急了。", "fx": { "health": -2 } },
+        { "who": "苏晚", "spr": "girl",
+          "chars": [{ "id": "hero", "img": "hero_idle", "x": 66 }, { "id": "girl", "img": "girl", "x": 30, "enter": "left" }],
+          "text": "曲线没骗人,是采样脚本有个 off-by-one。修好它,重新来。", "fx": { "mind": 3 }, "filter": null }
+      ],
+      "next": "sc_sea"
+    },
+    "sc_fame": {
+      "bg": "bg_office", "filter": null,
+      "beats": [
+        { "who": "旁白", "text": "论文一夜之间被转疯了。手机在桌上震个不停。", "sfx": null, "fx": { "fame": 5, "tech": 1 }, "cam": { "zoom": 1.08 } },
+        { "who": "林一", "spr": "hero", "chars": [{ "id": "hero", "img": "hero_talk", "x": 55, "enter": "drop" }],
+          "text": "看见了吗?它回来了。出发的意义,从来都是为了回来。", "hl": "first_light" }
+      ],
+      "next": "sc_sea"
+    },
+    "sc_sea": {
+      "bg": "bg_sea", "weather": "dust", "filter": null,
+      "beats": [
+        { "who": "旁白", "text": "很多年后,海边。潮声一遍遍推过来,像那条终于收敛的曲线。", "cam": { "zoom": 1 } },
+        { "who": "苏晚", "spr": "girl",
+          "chars": [{ "id": "girl", "img": "girl", "x": 30, "enter": "left" }, { "id": "hero", "img": "hero_idle", "x": 70, "enter": "right" }],
+          "text": "那……下一程去哪儿?" }
+      ],
+      "choice": {
+        "opts": [
+          { "t": "去所有算力到不了的地方", "req": { "mind": 12 }, "to": "sc_end_legend" },
+          { "t": "回实验室,把灯留给后来的人", "to": "sc_end_normal" }
+        ]
+      }
+    },
+    "sc_end_legend": {
+      "bg": "bg_sea", "filter": "dream", "snapshot": false,
+      "beats": [ { "who": "旁白", "text": "你们把问题留在了人间,把答案带向了海的那一边。" } ],
+      "ending": "E_legend"
+    },
+    "sc_end_normal": {
+      "bg": "bg_office", "snapshot": false,
+      "beats": [ { "who": "旁白", "text": "灯亮着。永远有人凌晨两点,盯着一条不肯下降的曲线。" } ],
+      "ending": "E_keeper"
+    }
+  },
+  "deathEnding": "E_dim",
+  "endings": {
+    "E_legend": { "tier": "legend", "title": "点火的人", "text": "你没有追上时代,你就是时代点火的那根火柴。" },
+    "E_keeper": { "tier": "normal", "title": "守灯人", "text": "了不起的事往往不喧哗。灯还亮着,就有人在路上。" },
+    "E_dim":    { "tier": "dim",    "title": "燃尽",   "text": "曲线收敛了,你却没能等到清晨。" }
+  }
+}

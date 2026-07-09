@@ -5,9 +5,12 @@
 //! - engine.rs 决定「整条对话到底拉起哪个 CLI 进程」:
 //!     * codex  → 直接 spawn 官方 `codex exec --json`(吃 ~/.codex 的 ChatGPT 订阅授权);
 //!     * claude → 原 `claude --print` 路线(再受 provider 选择影响)。
+//!
 //! 默认 codex —— 用户要求「默认就是 codex CLI」。设置改存 `~/Polaris/data/engine.json`,
 //! 重启后保留。chat.rs 每轮发消息时读 `current()` 决定分流。
 
+#[cfg(not(feature = "desktop"))]
+use crate::host::AppHandle;
 use directories::UserDirs;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
@@ -16,8 +19,6 @@ use std::fs;
 use std::path::PathBuf;
 #[cfg(feature = "desktop")]
 use tauri::AppHandle;
-#[cfg(not(feature = "desktop"))]
-use crate::host::AppHandle;
 
 /// 合法引擎标识。未知值一律回落 codex(默认)。
 const ENGINES: &[&str] = &["codex", "claude"];

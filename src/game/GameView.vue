@@ -960,51 +960,71 @@ onBeforeUnmount(() => {
 .back {
   position: fixed;
   top: 20px;
-  left: 24px;
+  /* 让出左侧玻璃坞一列,避免与印章/导航视觉打架 */
+  left: 118px;
   z-index: 20;
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-  color: #9aa1ab;
-  padding: 7px 16px;
-  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
+  color: var(--text-mut);
+  padding: 8px 18px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   font-size: 13px;
   letter-spacing: 0.1em;
-  transition: 0.2s;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 .back:hover {
-  color: #ece3d0;
-  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-hi);
+  border-color: var(--hairline-strong);
 }
+.back:active {
+  transform: scale(0.96);
+}
+/* 控制簇:一整枚玻璃胶囊,按钮是里面的分段 */
 .controls {
   position: fixed;
   top: 18px;
   right: 24px;
   z-index: 20;
   display: flex;
-  gap: 8px;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
 }
 .ctl {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-  color: #9aa1ab;
+  border: none;
+  background: transparent;
+  color: var(--text-mut);
   padding: 6px 13px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   cursor: pointer;
   font-size: 12px;
   letter-spacing: 0.12em;
-  transition: 0.2s;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 .ctl:hover {
-  color: #ece3d0;
-  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-hi);
+  background: rgba(255, 240, 220, 0.07);
+}
+.ctl:active {
+  transform: scale(0.94);
 }
 .ctl.on {
-  color: #e0c4b3;
-  border-color: #b5654a;
-  background: rgba(201, 139, 107, 0.16);
+  color: #f0d9c6;
+  background: rgba(201, 139, 107, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 230, 0.12);
 }
 
 .frame.ink {
@@ -1012,12 +1032,14 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 960px;
   min-height: 600px;
-  border-radius: 16px;
+  border-radius: var(--r-xl);
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  /* 玻璃画框:发丝边 + 顶缘高光 + 深投影,像一块架在暖光里的琉璃屏 */
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi), 0 40px 110px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(0, 0, 0, 0.2);
   background: radial-gradient(120% 80% at 80% 0%, rgba(44, 70, 97, 0.28), transparent 60%),
     radial-gradient(100% 70% at 0% 100%, rgba(60, 40, 40, 0.22), transparent 55%), #14161a;
-  color: #d8d2c4;
+  color: var(--text);
 }
 .stage-art,
 .stage-bg {
@@ -1243,21 +1265,32 @@ onBeforeUnmount(() => {
   text-align: left;
   padding: 15px 22px;
   cursor: pointer;
-  border: none;
-  border-left: 2px solid rgba(138, 162, 184, 0.45);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.045), transparent);
-  color: #cfc8ba;
+  /* 琉璃抉择条:整条是一块薄玻璃,画卷在字后面朦胧流动 */
+  border: 1px solid var(--hairline);
+  border-left: 2px solid rgba(138, 162, 184, 0.5);
+  border-radius: var(--r-md);
+  background: rgba(22, 15, 11, 0.32);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+  box-shadow: var(--edge-hi);
+  color: var(--text);
   font-size: 16px;
   letter-spacing: 0.04em;
-  transition: 0.25s;
-  font-family: "Songti SC", "SimSun", serif;
-  backdrop-filter: blur(1px);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
+    color var(--dur) var(--ease), transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+  font-family: var(--f-serif);
 }
 .ink-choice:hover:not(:disabled) {
-  border-left-color: #c98b6b;
-  background: linear-gradient(90deg, rgba(201, 139, 107, 0.16), transparent);
-  color: #f0e9da;
-  padding-left: 28px;
+  border-left-color: var(--accent);
+  border-color: rgba(224, 150, 88, 0.26);
+  background: rgba(201, 139, 107, 0.14);
+  color: var(--text-hi);
+  transform: translateX(6px);
+  box-shadow: var(--edge-hi-strong), 0 8px 26px rgba(0, 0, 0, 0.3);
+}
+.ink-choice:active:not(:disabled) {
+  transform: translateX(6px) scale(0.99);
 }
 .ink-choice:disabled {
   opacity: 0.5;
@@ -1291,26 +1324,41 @@ onBeforeUnmount(() => {
 }
 .free-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 11px 14px;
-  color: #e4ddce;
+  background: rgba(22, 15, 11, 0.36);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  padding: 11px 18px;
+  color: var(--text-hi);
   font-size: 14px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.free-input::placeholder {
+  color: var(--text-dim);
 }
 .free-input:focus {
   outline: none;
-  border-color: #c98b6b;
+  border-color: rgba(224, 150, 88, 0.5);
+  box-shadow: 0 0 0 3px rgba(224, 150, 88, 0.12);
 }
 .free-btn {
-  border: 1px solid #b5654a;
-  background: rgba(201, 139, 107, 0.14);
-  color: #f0e9da;
-  border-radius: 8px;
-  padding: 0 20px;
+  border: none;
+  background: linear-gradient(180deg, rgba(214, 148, 112, 0.92), rgba(181, 101, 74, 0.92));
+  color: #fff7ec;
+  border-radius: var(--r-pill);
+  padding: 0 22px;
   cursor: pointer;
   font-size: 14px;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 230, 0.28), 0 4px 14px rgba(0, 0, 0, 0.3);
+  transition: filter var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.free-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.free-btn:active {
+  transform: scale(0.96);
 }
 .free-btn:disabled {
   opacity: 0.5;
@@ -1319,9 +1367,13 @@ onBeforeUnmount(() => {
 
 .ink-side {
   position: relative;
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 1px solid var(--hairline);
   padding: 54px 28px;
-  background: rgba(0, 0, 0, 0.32);
+  /* 琉璃侧板:把身后的画卷吸成一层朦胧,命数浮在玻璃上 */
+  background: rgba(12, 8, 6, 0.34);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: inset 1px 0 0 rgba(255, 244, 230, 0.05);
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1471,23 +1523,35 @@ onBeforeUnmount(() => {
 .end-btn {
   appearance: none;
   cursor: pointer;
-  padding: 12px 26px;
-  border-radius: 8px;
-  border: 1px solid #b5654a;
-  background: rgba(201, 139, 107, 0.12);
-  color: #f0e9da;
+  padding: 12px 30px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(224, 150, 88, 0.4);
+  background: rgba(201, 139, 107, 0.16);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  backdrop-filter: blur(16px) saturate(145%);
+  box-shadow: var(--edge-hi);
+  color: var(--text-hi);
   font-size: 15px;
   letter-spacing: 0.1em;
-  font-family: "Songti SC", "SimSun", serif;
-  transition: 0.2s;
+  font-family: var(--f-serif);
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
 .end-btn:hover {
-  background: rgba(201, 139, 107, 0.22);
+  background: rgba(201, 139, 107, 0.28);
+  transform: translateY(-1px);
+  box-shadow: var(--edge-hi-strong), 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.end-btn:active {
+  transform: scale(0.97);
 }
 .end-btn.ghost {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--hairline-strong);
   background: transparent;
-  color: #9aa1ab;
+  color: var(--text-mut);
+}
+.end-btn.ghost:hover {
+  color: var(--text-hi);
 }
 
 /* Checkpoint 评分卡(游玩中) */
@@ -1495,10 +1559,13 @@ onBeforeUnmount(() => {
   margin: 4px 0 16px;
   max-width: 420px;
   padding: 14px 18px;
-  border: 1px solid rgba(138, 162, 184, 0.28);
+  border: 1px solid rgba(138, 162, 184, 0.24);
   border-left: 2px solid #8aa2b8;
-  border-radius: 8px;
-  background: linear-gradient(120deg, rgba(44, 70, 97, 0.18), rgba(8, 12, 20, 0.1));
+  border-radius: var(--r-md);
+  background: rgba(24, 30, 40, 0.32);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: var(--edge-hi);
   cursor: default;
 }
 .sc-head {
@@ -1723,12 +1790,14 @@ onBeforeUnmount(() => {
   pointer-events: all;
 }
 
-/* 通用浮层(存读 / 回看) */
+/* 通用浮层(存读 / 回看):底一层轻磨砂,面板本体是厚琉璃 */
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(6, 7, 10, 0.78);
+  background: rgba(8, 6, 4, 0.5);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(10px) saturate(120%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1737,12 +1806,26 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 560px;
   max-height: 76vh;
-  background: #14161a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(34px) saturate(160%);
+  backdrop-filter: blur(34px) saturate(160%);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-xl);
+  box-shadow: var(--edge-hi-strong), var(--shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: sheetIn 0.34s var(--ease);
+}
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .pl-head {
   padding: 16px 22px;
@@ -1776,13 +1859,19 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  padding: 13px 16px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 240, 220, 0.03);
+  border-radius: var(--r-md);
   margin-bottom: 10px;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.slot:hover {
+  border-color: var(--hairline-strong);
+  background: rgba(255, 240, 220, 0.05);
 }
 .slot.quick {
-  border-color: rgba(201, 139, 107, 0.4);
+  border-color: rgba(201, 139, 107, 0.38);
 }
 .slot-info {
   display: flex;
@@ -1804,17 +1893,22 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 .slot-act button {
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--hairline-strong);
   background: transparent;
-  color: #cfc8ba;
-  border-radius: 7px;
-  padding: 6px 12px;
+  color: var(--text);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
   font-size: 12px;
   cursor: pointer;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
 }
 .slot-act button:hover:not(:disabled) {
-  border-color: #c98b6b;
-  color: #f0e9da;
+  border-color: var(--accent);
+  color: var(--text-hi);
+}
+.slot-act button:active:not(:disabled) {
+  transform: scale(0.95);
 }
 .slot-act button:disabled {
   opacity: 0.4;

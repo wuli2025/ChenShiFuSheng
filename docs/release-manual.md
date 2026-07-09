@@ -49,9 +49,9 @@ gh run download $runId -D $dir          # 得到 bundles-windows-latest / bundle
   "notes": "……",
   "pub_date": "2026-..-..T..:..:..Z",
   "platforms": {
-    "windows-x86_64": { "signature": "<setup.exe.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/polaris_coworker/releases/download/v0.2.12/Polaris_0.2.12_x64-setup.exe" },
-    "darwin-x86_64":  { "signature": "<app.tar.gz.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/polaris_coworker/releases/download/v0.2.12/Polaris.app.tar.gz" },
-    "darwin-aarch64": { "signature": "<app.tar.gz.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/polaris_coworker/releases/download/v0.2.12/Polaris.app.tar.gz" }
+    "windows-x86_64": { "signature": "<setup.exe.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/ChenShiFuSheng/releases/download/v0.2.12/Polaris_0.2.12_x64-setup.exe" },
+    "darwin-x86_64":  { "signature": "<app.tar.gz.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/ChenShiFuSheng/releases/download/v0.2.12/Polaris.app.tar.gz" },
+    "darwin-aarch64": { "signature": "<app.tar.gz.sig 全文>", "url": "https://gh-proxy.com/https://github.com/wuli2025/ChenShiFuSheng/releases/download/v0.2.12/Polaris.app.tar.gz" }
   }
 }
 ```
@@ -67,7 +67,7 @@ gh release create v0.2.12 `
   "$dir\...\Polaris_0.2.12_universal.dmg" `
   "$dir\...\Polaris.app.tar.gz" `
   "$dir\latest.json" `
-  --repo wuli2025/polaris_coworker --title "Polaris v0.2.12" --notes "……" --latest
+  --repo wuli2025/ChenShiFuSheng --title "Polaris v0.2.12" --notes "……" --latest
 ```
 
 `--latest` 让 `releases/latest/download/latest.json` 解析到本版 —— 这正是
@@ -95,7 +95,7 @@ wrangler pages deploy "D:\polaris\polaris-site" --project-name polaris --commit-
 ## 6. 验证自动更新端点
 
 ```powershell
-Invoke-RestMethod "https://github.com/wuli2025/polaris_coworker/releases/latest/download/latest.json"
+Invoke-RestMethod "https://github.com/wuli2025/ChenShiFuSheng/releases/latest/download/latest.json"
 # 应返回新版 version + windows-x86_64 / darwin-x86_64 / darwin-aarch64 三个平台条目
 # 且每个 url 都带 https://gh-proxy.com/ 前缀（见第 3 步）
 ```

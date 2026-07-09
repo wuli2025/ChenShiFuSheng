@@ -109,10 +109,18 @@ function endings(id: string) {
   gap: 22px;
 }
 .game {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  box-shadow: var(--edge-hi), var(--shadow-sm);
   padding: 20px 24px 22px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.game:hover {
+  border-color: var(--hairline-strong);
+  box-shadow: var(--edge-hi-strong), var(--shadow-md);
 }
 .g-row {
   display: flex;
@@ -134,16 +142,21 @@ function endings(id: string) {
 }
 .g-play {
   margin-left: auto;
-  border: 1px solid rgba(201, 139, 107, 0.5);
-  background: rgba(201, 139, 107, 0.12);
-  color: #f0e9da;
-  border-radius: 8px;
-  padding: 6px 16px;
+  border: 1px solid rgba(201, 139, 107, 0.45);
+  background: rgba(201, 139, 107, 0.14);
+  color: var(--text-hi);
+  border-radius: var(--r-pill);
+  padding: 7px 18px;
   font-size: 13px;
   cursor: pointer;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .g-play:hover {
-  background: rgba(201, 139, 107, 0.24);
+  background: rgba(201, 139, 107, 0.26);
+  transform: translateY(-1px);
+}
+.g-play:active {
+  transform: scale(0.97);
 }
 .ends {
   margin-top: 16px;

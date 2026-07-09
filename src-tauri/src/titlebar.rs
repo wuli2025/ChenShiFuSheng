@@ -31,7 +31,7 @@ pub fn set_titlebar_color(
         const DWMWA_TEXT_COLOR: u32 = 36;
         let cap = colorref(&caption)?;
         let txt = colorref(&text)?;
-        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as *mut core::ffi::c_void;
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0;
         unsafe {
             DwmSetWindowAttribute(
                 hwnd,

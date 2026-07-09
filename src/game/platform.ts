@@ -4,13 +4,16 @@ import { reactive } from "vue";
 
 export type Screen =
   | "lobby"
-  | "create"
+  | "create" // 已下线:旧版对话式生成(保留类型仅为兼容存量文件,入口已移除)
   | "play"
   | "external"
+  | "projects" // 我的项目:用户自己生成的剧本工程,卡片可试玩/编辑/发布
   | "library"
   | "gallery"
-  | "templates"
-  | "settings";
+  | "templates" // 模板库:故事线模板(v6 起重新进入左栏五分区)
+  | "settings"
+  | "studio" // 创作工坊/生成:嵌入 AI人生画布引擎工作台(双剧本线路+codex生图)
+  | "vnstudio"; // 灵动工坊:原生 VN 动效叙事生产线(claude写稿+codex立绘场景+灵动引擎试玩/导出)
 
 export interface PlatformState {
   screen: Screen;
@@ -47,8 +50,20 @@ export function backToLobby() {
   platform.externalUrl = null;
 }
 
+/** @deprecated 旧版对话式生成已下线,创作统一走 goStudio()。保留仅为存量文件类型兼容。 */
 export function goCreate() {
   platform.screen = "create";
+}
+/** 创作工坊:嵌入画布引擎工作台(写剧本 → 图谱改稿 → 定稿 → codex 生图 → 试玩/导出) */
+export function goStudio() {
+  platform.screen = "studio";
+}
+/** 灵动工坊:VN 动效叙事——一句话意图 → claude 写灵动剧本 → codex 场景图+透明立绘 → 试玩/导出 */
+export function goVnStudio() {
+  platform.screen = "vnstudio";
+}
+export function goProjects() {
+  platform.screen = "projects";
 }
 export function goLibrary() {
   platform.screen = "library";

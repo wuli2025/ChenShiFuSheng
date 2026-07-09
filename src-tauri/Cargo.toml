@@ -10,7 +10,7 @@ resolver = "2"
 
 [package]
 name = "polaris-app"
-version = "1.0.5"
+version = "1.0.6"
 description = "尘世浮生 - 叙事游戏平台"
 authors = ["winner3388"]
 edition = "2021"
@@ -28,7 +28,8 @@ tauri-build = { version = "2.0", features = [] }
 # ── 桌面外壳依赖：全部 optional，仅在 `desktop` feature 下编译 ──
 # Docker(server) 构建用 `--no-default-features --features server`，不拉 tauri，
 # 因此无需 Linux 上的 webkit2gtk-dev/libsoup 等系统库即可编译同一份源码。
-tauri = { version = "2.1", features = [], optional = true }
+# unstable = multiwebview:创作工坊把工作台以「原生子 WebView」嵌进主窗口(studio.rs)
+tauri = { version = "2.1", features = ["unstable"], optional = true }
 tauri-plugin-dialog = { version = "2.0", optional = true }
 tauri-plugin-fs = { version = "2.0", optional = true }
 tauri-plugin-shell = { version = "2.0", optional = true }

@@ -26,6 +26,8 @@
 //! 解压到 `~/.local/polaris-node` 并写 shell 配置。经 `build_install_shell` 选 PowerShell 或 sh。
 //! 持久化 PATH: Windows 写注册表用户 PATH; macOS·Linux 写 `~/.zshrc` 等 shell 配置。
 
+#[cfg(not(feature = "desktop"))]
+use crate::host::AppHandle;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -37,8 +39,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "desktop")]
 use tauri::{AppHandle, Emitter};
-#[cfg(not(feature = "desktop"))]
-use crate::host::AppHandle;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -355,7 +355,12 @@ fn claude_candidates() -> Vec<PathBuf> {
         // macOS 免 sudo 装的 Node (~/.local/polaris-node) 的全局 bin: `npm i -g` 把 claude
         // 链到这里。mac GUI 从 Finder 启动时 PATH 极简、`npm prefix -g` 又拿不到 → 显式兜底,
         // 让重启后 chat spawn 仍找得到。
-        v.push(h.join(".local").join("polaris-node").join("bin").join("claude"));
+        v.push(
+            h.join(".local")
+                .join("polaris-node")
+                .join("bin")
+                .join("claude"),
+        );
     }
     // npm 全局 (用户真实前缀): 先原生 exe, 再 shim
     if let Some(prefix) = npm_global_prefix() {
@@ -442,7 +447,7 @@ fn resolve_claude_exe_uncached() -> Option<PathBuf> {
         return Some(p);
     }
     let hits = which_all("claude"); // 已过滤为「存在的」路径
-    // 1. PATH 命中里的 .exe (原生装常见)
+                                    // 1. PATH 命中里的 .exe (原生装常见)
     if let Some(p) = hits.iter().find(|p| is_exe(p)) {
         return Some(p.clone());
     }
@@ -469,7 +474,12 @@ fn codex_candidates() -> Vec<PathBuf> {
     if let Some(h) = home_dir() {
         // 官方原生脚本 / brew: ~/.local/bin、/usr/local/bin 等已在 PATH;这里补 npm 免 sudo 装的 node 全局 bin
         v.push(h.join(".local").join("bin").join("codex"));
-        v.push(h.join(".local").join("polaris-node").join("bin").join("codex"));
+        v.push(
+            h.join(".local")
+                .join("polaris-node")
+                .join("bin")
+                .join("codex"),
+        );
     }
     if let Some(prefix) = npm_global_prefix() {
         v.push(prefix.join("codex.exe"));
@@ -503,7 +513,11 @@ pub fn resolve_codex_exe() -> Option<PathBuf> {
         .iter()
         .find(|p| is_exe(p))
         .cloned()
-        .or_else(|| codex_candidates().into_iter().find(|p| is_exe(p) && p.exists()))
+        .or_else(|| {
+            codex_candidates()
+                .into_iter()
+                .find(|p| is_exe(p) && p.exists())
+        })
         // PATH 命中(可能是 .cmd / 无扩展 shell 脚本) → 现代 Rust std 能经 cmd.exe 运行 .cmd
         .or_else(|| {
             hits.into_iter().find(|p| {
@@ -557,9 +571,11 @@ fn node_dir_candidates() -> Vec<PathBuf> {
 fn is_app_exec_alias(p: &std::path::Path) -> bool {
     #[cfg(windows)]
     {
-        let in_windows_apps = p
-            .components()
-            .any(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("WindowsApps"));
+        let in_windows_apps = p.components().any(|c| {
+            c.as_os_str()
+                .to_string_lossy()
+                .eq_ignore_ascii_case("WindowsApps")
+        });
         if !in_windows_apps {
             return false;
         }
@@ -741,7 +757,7 @@ fn ensure_dir_on_path(dir: &str) -> PathFixResult {
                 };
             }
         }
-        return match append_user_path(dir) {
+        match append_user_path(dir) {
             Ok(_) => PathFixResult {
                 ok: true,
                 dir: Some(dir.to_string()),
@@ -758,7 +774,7 @@ fn ensure_dir_on_path(dir: &str) -> PathFixResult {
                     "已加入当前进程 PATH, 但持久化到用户 PATH 失败: {e}。可手动把 {dir} 加到 PATH。"
                 ),
             },
-        };
+        }
     }
     #[cfg(not(windows))]
     {
@@ -792,7 +808,11 @@ fn persist_unix_path(dir: &str) -> PathFixResult {
             already = true;
             continue;
         }
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&p)
+        {
             let _ = writeln!(f, "\n# Added by Polaris\n{line}");
             wrote = true;
         }
@@ -802,7 +822,9 @@ fn persist_unix_path(dir: &str) -> PathFixResult {
             ok: true,
             dir: Some(dir.to_string()),
             status: "added".into(),
-            message: format!("已把 {dir} 写进 shell 配置 (~/.zshrc 等) 并同步当前进程。新开终端即生效。"),
+            message: format!(
+                "已把 {dir} 写进 shell 配置 (~/.zshrc 等) 并同步当前进程。新开终端即生效。"
+            ),
         }
     } else if already {
         PathFixResult {
@@ -975,7 +997,10 @@ fn login_shell_path() -> Option<String> {
 fn merge_login_path_into_process(login_path: &str) {
     use std::collections::HashSet;
     let cur = std::env::var("PATH").unwrap_or_default();
-    let have: HashSet<String> = cur.split(':').map(|s| s.trim_end_matches('/').to_string()).collect();
+    let have: HashSet<String> = cur
+        .split(':')
+        .map(|s| s.trim_end_matches('/').to_string())
+        .collect();
     let adds: Vec<&str> = login_path
         .split(':')
         .filter(|s| !s.is_empty() && !have.contains(&s.trim_end_matches('/').to_string()))
@@ -1067,15 +1092,7 @@ pub fn env_check() -> EnvReport {
         false,
         "未安装 (npm 安装方式需要它)",
     );
-    let npm = detect(
-        "npm",
-        "npm",
-        "npm",
-        &["--version"],
-        &[],
-        false,
-        "未安装",
-    );
+    let npm = detect("npm", "npm", "npm", &["--version"], &[], false, "未安装");
     // uv —— Python 脚本运行时的统一托管者(脚本执行公约依赖它)。候选含 ~/.local/bin/uv(.exe)。
     let uv = detect(
         "uv",
@@ -1190,7 +1207,9 @@ pub fn env_install_node(app: AppHandle) -> Result<String, String> {
     #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = &app;
-        return Err("Node.js 自动安装目前支持 Windows 与 macOS; Linux 请用系统包管理器安装。".into());
+        return Err(
+            "Node.js 自动安装目前支持 Windows 与 macOS; Linux 请用系统包管理器安装。".into(),
+        );
     }
     #[cfg(any(windows, target_os = "macos"))]
     {
@@ -1586,7 +1605,10 @@ pub fn env_uv_cache_info() -> UvCacheInfo {
     let (bytes, dir_str) = match &dir {
         Some(d) => {
             let pb = PathBuf::from(d);
-            (if pb.exists() { dir_size(&pb) } else { 0 }, Some(to_fwd(&pb)))
+            (
+                if pb.exists() { dir_size(&pb) } else { 0 },
+                Some(to_fwd(&pb)),
+            )
         }
         None => (0, None),
     };
@@ -1751,7 +1773,10 @@ pub fn env_claude_update_check() -> ClaudeUpdateInfo {
                 _ => false,
             };
             let message = if update_available {
-                format!("发现新版本 {l} (当前 {})。", current.clone().unwrap_or_default())
+                format!(
+                    "发现新版本 {l} (当前 {})。",
+                    current.clone().unwrap_or_default()
+                )
             } else {
                 format!("已是最新版本 ({})。", current.clone().unwrap_or_default())
             };
@@ -1800,6 +1825,7 @@ pub fn env_cancel(req_id: String) -> Result<(), String> {
 /// 构造一个跑给定内联命令的系统 shell 进程:
 /// - Windows → PowerShell (见 `build_powershell`);
 /// - 类 Unix(含 macOS) → `sh -lc`(`-l` 走登录配置以拿到用户 PATH, npm 全局 bin 才在内)。
+///
 /// 安装/更新 Claude Code 这类跨平台命令统一走它。
 fn build_install_shell(inner: &str) -> Command {
     #[cfg(windows)]
@@ -1864,7 +1890,13 @@ fn emit(app: &AppHandle, ev: EnvStreamEvent) {
 }
 
 /// 起子进程, 双线程读 stdout/stderr → `env:stream` 日志; 退出后(可选)修 PATH, 再发 done。
-fn stream_install(app: AppHandle, req_id: String, mut cmd: Command, fix_path_after: bool, label: &str) {
+fn stream_install(
+    app: AppHandle,
+    req_id: String,
+    mut cmd: Command,
+    fix_path_after: bool,
+    label: &str,
+) {
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -2062,8 +2094,7 @@ mod tests {
             Some(PathBuf::from(r"C:\Users\mi\.local\bin"))
         );
         // node_modules 路径 → 永不返回那个内部 bin 目录 (要么 npm 前缀, 要么至少不是 .../bin 自身的误用)
-        let npmish =
-            PathBuf::from(r"D:\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe");
+        let npmish = PathBuf::from(r"D:\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe");
         let dir = claude_dir_from_path(&npmish).expect("应解析出某个目录");
         assert!(
             !dir.ends_with("claude.exe"),
@@ -2079,8 +2110,14 @@ mod tests {
         let first = prepend_process_path(marker);
         let path_now = std::env::var("PATH").unwrap_or_default();
         assert!(first, "首次应真的前插");
-        assert!(path_contains_dir(&path_now, marker), "前插后 PATH 应含该目录");
-        assert!(!prepend_process_path(marker), "已在 PATH 中应返回 false (幂等)");
+        assert!(
+            path_contains_dir(&path_now, marker),
+            "前插后 PATH 应含该目录"
+        );
+        assert!(
+            !prepend_process_path(marker),
+            "已在 PATH 中应返回 false (幂等)"
+        );
 
         // resolve_claude_exe: 若本机装了 claude, 解析出的路径必须真实存在 (Windows 上偏好 .exe)
         if let Some(exe) = resolve_claude_exe() {
@@ -2092,9 +2129,11 @@ mod tests {
                     .map(|e| e.eq_ignore_ascii_case("exe"))
                     .unwrap_or(false);
                 // 本机同时有 .exe 与 .cmd 时, 必须挑 .exe (chat spawn 只认 .exe)
-                let has_exe_alt = which_all("claude")
-                    .iter()
-                    .any(|p| p.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false));
+                let has_exe_alt = which_all("claude").iter().any(|p| {
+                    p.extension()
+                        .map(|e| e.eq_ignore_ascii_case("exe"))
+                        .unwrap_or(false)
+                });
                 if has_exe_alt {
                     assert!(is_exe, "存在 .exe 候选时应优先解析为 .exe, 实得: {exe:?}");
                 }

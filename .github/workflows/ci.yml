@@ -1,6 +1,6 @@
 name: CI
 
-# 在 push / PR 到 main 时跑: Rust 单测(硬门槛) + clippy/fmt(建议性) + 前端构建。
+# 在 push / PR 到 main 时跑: Rust fmt + clippy + 单测(全部硬门槛) + 前端构建。
 # 游戏平台精简后:只剩桌面壳单包(polaris-app),Polaris 的 server/Forge/sandbox 路径已下线,
 # 对应的 forge-matrix / forge-e2e / polaris-cli 三个 CI job 一并移除。
 on:
@@ -33,16 +33,15 @@ jobs:
       - name: Stub frontend dist (满足 tauri generate_context!)
         shell: bash
         run: mkdir -p ../dist && echo '<!doctype html><title>stub</title>' > ../dist/index.html
+      # 硬门槛: 格式必须规整 (存量已清零, 见 2026-07 收紧)
+      - name: Format check
+        run: cargo fmt --all --check
+      # 硬门槛: clippy 零告警 (-D warnings, 存量已清零)
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
       # 硬门槛: 单测必须过 (含 kb 路径穿越 / codex_proxy 解析边界等回归测试)
       - name: Test
         run: cargo test --workspace
-      # 建议性: 先不 -D warnings, 等存量 lint 清干净再收紧成硬门槛
-      - name: Format check
-        run: cargo fmt --all --check
-        continue-on-error: true
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets
-        continue-on-error: true
 
   frontend:
     name: Frontend (type-check + build)
@@ -51,8 +50,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       # npm run build = vue-tsc --noEmit && vite build (类型检查 + 打包)
       - run: npm run build
+      - run: npm run check:contract
+      - run: npm run audit:prod

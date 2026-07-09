@@ -3,6 +3,8 @@
 //! MVP: 单文件 JSON (`~/Polaris/data/state.json`), 全局 RwLock 保护
 //! 后续接 ② Wiki 的 storage::* (SQLite), API 不动
 
+#[cfg(not(feature = "desktop"))]
+use crate::host::AppHandle;
 use anyhow::Result;
 use directories::UserDirs;
 use once_cell::sync::Lazy;
@@ -13,8 +15,6 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(feature = "desktop")]
 use tauri::AppHandle;
-#[cfg(not(feature = "desktop"))]
-use crate::host::AppHandle;
 
 // ───────────────────────── Types ─────────────────────────
 
@@ -129,7 +129,11 @@ pub fn init(_app: &AppHandle) -> Result<()> {
 pub fn ensure_mao_project() {
     {
         let mut state = STATE.write();
-        let mao_pid = match state.projects.iter().position(|p| p.name == MAO_PROJECT_NAME) {
+        let mao_pid = match state
+            .projects
+            .iter()
+            .position(|p| p.name == MAO_PROJECT_NAME)
+        {
             Some(i) => state.projects[i].id.clone(),
             None => {
                 let pid = new_id("p");
@@ -237,7 +241,7 @@ pub fn get_messages(conversation_id: &str) -> Vec<Message> {
         .filter(|m| m.conversation_id == conversation_id)
         .cloned()
         .collect();
-    list.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    list.sort_by_key(|a| a.created_at);
     list
 }
 
@@ -251,7 +255,7 @@ pub fn conversations_of_project(project_id: &str) -> Vec<Conversation> {
         .filter(|c| c.project_id == project_id)
         .cloned()
         .collect();
-    list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    list.sort_by_key(|c| std::cmp::Reverse(c.updated_at));
     list
 }
 
@@ -278,11 +282,7 @@ pub fn project_kb_scope(project_id: &str) -> Option<String> {
 }
 
 /// 设置项目的人格与知识库 scope（persona::persona_apply 用）。
-pub fn set_project_persona(
-    project_id: &str,
-    persona_id: Option<String>,
-    kb_scope: Option<String>,
-) {
+pub fn set_project_persona(project_id: &str, persona_id: Option<String>, kb_scope: Option<String>) {
     {
         let mut st = STATE.write();
         if let Some(p) = st.projects.iter_mut().find(|p| p.id == project_id) {
@@ -364,14 +364,21 @@ pub fn conv_create_project(name: String) -> Result<Project, String> {
 
 /// 手动设置项目的知识库 scope（人格工坊里的下拉）。persona_id 维持不变。
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub fn conv_set_project_kb_scope(project_id: String, kb_scope: Option<String>) -> Result<(), String> {
+pub fn conv_set_project_kb_scope(
+    project_id: String,
+    kb_scope: Option<String>,
+) -> Result<(), String> {
     let persona = STATE
         .read()
         .projects
         .iter()
         .find(|p| p.id == project_id)
         .and_then(|p| p.persona_id.clone());
-    set_project_persona(&project_id, persona, kb_scope.filter(|s| !s.trim().is_empty()));
+    set_project_persona(
+        &project_id,
+        persona,
+        kb_scope.filter(|s| !s.trim().is_empty()),
+    );
     Ok(())
 }
 
@@ -455,7 +462,7 @@ pub fn conv_list_conversations(project_id: String) -> Vec<Conversation> {
         .filter(|c| c.project_id == project_id)
         .cloned()
         .collect();
-    list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    list.sort_by_key(|c| std::cmp::Reverse(c.updated_at));
     list
 }
 

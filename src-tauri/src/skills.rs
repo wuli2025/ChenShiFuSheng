@@ -74,10 +74,8 @@ const WEB_VERSION: &str = "2";
 const WEB_SKILL_MD: &str = include_str!("templates/skills/polaris-web-studio/SKILL.md");
 const WEB_LICENSE: &str = include_str!("templates/skills/polaris-web-studio/LICENSE");
 const WEB_SITE_CSS: &str = include_str!("templates/skills/polaris-web-studio/assets/site.css");
-const WEB_RUNTIME_JS: &str =
-    include_str!("templates/skills/polaris-web-studio/assets/runtime.js");
-const WEB_TEMPLATE: &str =
-    include_str!("templates/skills/polaris-web-studio/templates/site.html");
+const WEB_RUNTIME_JS: &str = include_str!("templates/skills/polaris-web-studio/assets/runtime.js");
+const WEB_TEMPLATE: &str = include_str!("templates/skills/polaris-web-studio/templates/site.html");
 
 // ───────── 「壹伴排版优化」多文件技能（公众号排版，编译期内嵌，启动落盘）─────────
 // 升级成多文件：SKILL.md（只产语义正文）+ scripts/wechat_yiban.py（壹伴样式引擎 + CloakBrowser
@@ -118,8 +116,7 @@ const WECHAT_TS_ID: &str = "wechat-md-typesetter";
 //     +「h2 加 emoji 图标、关键句做 blockquote 卡片」营造配图感(SKILL.md 同步)。
 //     MediaOps 交付改两个功能键二选一:「排版 HTML 文件」(render 出文件自传) /「截图上传」(长图)。
 const WECHAT_TS_VERSION: &str = "10";
-const WECHAT_TS_SKILL_MD: &str =
-    include_str!("templates/skills/wechat-md-typesetter/SKILL.md");
+const WECHAT_TS_SKILL_MD: &str = include_str!("templates/skills/wechat-md-typesetter/SKILL.md");
 const WECHAT_TS_YIBAN_PY: &str =
     include_str!("templates/skills/wechat-md-typesetter/scripts/wechat_yiban.py");
 
@@ -415,7 +412,7 @@ fn scan_user_skills() -> Vec<UserSkill> {
             skills.push(skill);
         }
     }
-    skills.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    skills.sort_by_key(|s| std::cmp::Reverse(s.created_at));
     skills
 }
 
@@ -609,11 +606,33 @@ pub fn detect_browser_intent(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
     let triggers = [
         // URL / 英文
-        "http://", "https://", "www.", "browser", "scrape", "scraping", "crawl",
-        "playwright", "selenium", "puppeteer", "captcha", "cloudflare",
+        "http://",
+        "https://",
+        "www.",
+        "browser",
+        "scrape",
+        "scraping",
+        "crawl",
+        "playwright",
+        "selenium",
+        "puppeteer",
+        "captcha",
+        "cloudflare",
         // 中文
-        "网页", "网站", "浏览器", "打开链接", "打开网址", "抓取", "爬取", "爬虫",
-        "登录网", "网页截图", "网页自动化", "填表单", "网上下单", "自动化操作网页",
+        "网页",
+        "网站",
+        "浏览器",
+        "打开链接",
+        "打开网址",
+        "抓取",
+        "爬取",
+        "爬虫",
+        "登录网",
+        "网页截图",
+        "网页自动化",
+        "填表单",
+        "网上下单",
+        "自动化操作网页",
     ];
     triggers.iter().any(|t| lower.contains(t))
 }
@@ -624,10 +643,25 @@ pub fn detect_pptx_intent(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
     let triggers = [
         // 英文
-        "ppt", "pptx", "powerpoint", "slide deck", "slides", "keynote", "presentation",
+        "ppt",
+        "pptx",
+        "powerpoint",
+        "slide deck",
+        "slides",
+        "keynote",
+        "presentation",
         // 中文
-        "幻灯片", "演示文稿", "演示文档", "做个演示", "做一个演示", "做份演示",
-        "汇报材料", "路演", "宣讲", "述职", "答辩",
+        "幻灯片",
+        "演示文稿",
+        "演示文档",
+        "做个演示",
+        "做一个演示",
+        "做份演示",
+        "汇报材料",
+        "路演",
+        "宣讲",
+        "述职",
+        "答辩",
     ];
     triggers.iter().any(|t| lower.contains(t))
 }
@@ -639,14 +673,47 @@ pub fn detect_image_intent(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
     let triggers = [
         // 英文
-        "generate an image", "generate image", "create an image", "make an image",
-        "draw me", "text-to-image", "an illustration", "a poster", "ai art",
+        "generate an image",
+        "generate image",
+        "create an image",
+        "make an image",
+        "draw me",
+        "text-to-image",
+        "an illustration",
+        "a poster",
+        "ai art",
         // 中文 · 动词类
-        "生图", "生成图片", "生成图像", "生成一张图", "生成一幅", "文生图", "ai 作图",
-        "ai作图", "ai 画", "ai画", "画一张", "画一幅", "画个", "画张", "画幅",
-        "帮我画", "给我画", "做张图", "做一张图", "做个图", "来张图", "出张图",
+        "生图",
+        "生成图片",
+        "生成图像",
+        "生成一张图",
+        "生成一幅",
+        "文生图",
+        "ai 作图",
+        "ai作图",
+        "ai 画",
+        "ai画",
+        "画一张",
+        "画一幅",
+        "画个",
+        "画张",
+        "画幅",
+        "帮我画",
+        "给我画",
+        "做张图",
+        "做一张图",
+        "做个图",
+        "来张图",
+        "出张图",
         // 中文 · 名词类（强烈暗示位图绘制）
-        "配图", "海报", "插画", "插图", "封面图", "宣传图", "壁纸", "头像图",
+        "配图",
+        "海报",
+        "插画",
+        "插图",
+        "封面图",
+        "宣传图",
+        "壁纸",
+        "头像图",
     ];
     triggers.iter().any(|t| lower.contains(t))
 }
@@ -658,11 +725,33 @@ pub fn detect_download_intent(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
     let triggers = [
         // 英文
-        "download", "wget", "curl ", "aria2", "fetch the", ".tar.gz", ".tar.bz2",
-        ".zip", ".iso", ".bin", ".gguf", ".safetensors", "torrent",
+        "download",
+        "wget",
+        "curl ",
+        "aria2",
+        "fetch the",
+        ".tar.gz",
+        ".tar.bz2",
+        ".zip",
+        ".iso",
+        ".bin",
+        ".gguf",
+        ".safetensors",
+        "torrent",
         // 中文
-        "下载", "下个", "拉取", "拉一下", "拉个", "获取文件", "大文件", "压缩包",
-        "镜像包", "数据集", "模型权重", "安装包", "离线包",
+        "下载",
+        "下个",
+        "拉取",
+        "拉一下",
+        "拉个",
+        "获取文件",
+        "大文件",
+        "压缩包",
+        "镜像包",
+        "数据集",
+        "模型权重",
+        "安装包",
+        "离线包",
     ];
     triggers.iter().any(|t| lower.contains(t))
 }
@@ -869,10 +958,7 @@ fn install_web_video_presentation() -> Result<(), String> {
     let tmp = make_temp_dir()?;
     let repo = tmp.join("repo");
     let repo_s = repo.to_string_lossy();
-    let clone_res = run_cmd(
-        "git",
-        &["clone", "--depth", "1", WVP_REPO, repo_s.as_ref()],
-    );
+    let clone_res = run_cmd("git", &["clone", "--depth", "1", WVP_REPO, repo_s.as_ref()]);
     if let Err(e) = clone_res {
         let _ = fs::remove_dir_all(&tmp);
         return Err(format!("下载技能包失败（需要 git + 联网）：{}", e));
@@ -1168,7 +1254,10 @@ fn import_from_remote(src: &str) -> Result<Vec<String>, String> {
         let dest = tmp.join("repo");
         let dest_s = dest.to_string_lossy();
         // `--` 终止选项解析: 否则 src 以 `-` 开头(如 --upload-pack=…)会被 git 当 flag → 参数注入。
-        run_cmd("git", &["clone", "--depth", "1", "--", src, dest_s.as_ref()])?;
+        run_cmd(
+            "git",
+            &["clone", "--depth", "1", "--", src, dest_s.as_ref()],
+        )?;
         import_from_dir(&dest)
     };
 
@@ -1241,7 +1330,11 @@ fn import_one_md(md: &Path, default_source: &str) -> Result<String, String> {
             .and_then(|n| n.to_str())
             .filter(|s| !["unzipped", "repo", "skills", ""].contains(s))
             .map(|s| s.to_string())
-            .or_else(|| md.file_stem().and_then(|n| n.to_str()).map(|s| s.to_string()))
+            .or_else(|| {
+                md.file_stem()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_else(|| "imported-skill".to_string());
         (base.clone(), base, String::new(), "user".to_string())
     };

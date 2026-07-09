@@ -5,10 +5,9 @@
 //! 未引用任何 GPL 项目的源码。
 //!
 //! 入口 [`convert_to_markdown`]：
-//!   - `Ok(Some(md))` → 抽出了文本，调用方写成 `.md`
-//!   - `Ok(None)`     → 无需 / 无法抽文本（图片、音视频、压缩包、未知二进制），
-//!                      调用方应原样复制文件
-//!   - `Err(msg)`     → 解析失败（含被 guard 兜住的 panic）
+//! - `Ok(Some(md))` → 抽出了文本，调用方写成 `.md`
+//! - `Ok(None)` → 无需 / 无法抽文本（图片、音视频、压缩包、未知二进制），调用方应原样复制文件
+//! - `Err(msg)` → 解析失败（含被 guard 兜住的 panic）
 
 use std::io::Read;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -38,16 +37,89 @@ fn guard<T>(label: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, Str
 /// 直接当纯文本读取的扩展名（含常见配置 / 代码 / 标记语言）。
 const TEXT_EXTS: &[&str] = &[
     // 文档 / 标记
-    "txt", "text", "log", "md", "markdown", "mdx", "rst", "org", "tex",
+    "txt",
+    "text",
+    "log",
+    "md",
+    "markdown",
+    "mdx",
+    "rst",
+    "org",
+    "tex",
     // 数据 / 配置
-    "csv", "tsv", "json", "jsonl", "ndjson", "yaml", "yml", "toml", "ini", "conf", "cfg",
-    "env", "properties", "xml", "html", "htm", "svg",
+    "csv",
+    "tsv",
+    "json",
+    "jsonl",
+    "ndjson",
+    "yaml",
+    "yml",
+    "toml",
+    "ini",
+    "conf",
+    "cfg",
+    "env",
+    "properties",
+    "xml",
+    "html",
+    "htm",
+    "svg",
     // 代码
-    "rs", "js", "mjs", "cjs", "ts", "tsx", "jsx", "vue", "py", "go", "java", "kt", "kts",
-    "swift", "c", "h", "cpp", "cc", "cxx", "hpp", "cs", "rb", "php", "pl", "lua", "sh",
-    "bash", "zsh", "fish", "bat", "ps1", "psm1", "sql", "graphql", "gql", "r", "scala",
-    "dart", "ex", "exs", "erl", "clj", "hs", "ml", "jl", "vim", "css", "scss", "sass",
-    "less", "styl", "makefile", "dockerfile", "gradle", "proto",
+    "rs",
+    "js",
+    "mjs",
+    "cjs",
+    "ts",
+    "tsx",
+    "jsx",
+    "vue",
+    "py",
+    "go",
+    "java",
+    "kt",
+    "kts",
+    "swift",
+    "c",
+    "h",
+    "cpp",
+    "cc",
+    "cxx",
+    "hpp",
+    "cs",
+    "rb",
+    "php",
+    "pl",
+    "lua",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "bat",
+    "ps1",
+    "psm1",
+    "sql",
+    "graphql",
+    "gql",
+    "r",
+    "scala",
+    "dart",
+    "ex",
+    "exs",
+    "erl",
+    "clj",
+    "hs",
+    "ml",
+    "jl",
+    "vim",
+    "css",
+    "scss",
+    "sass",
+    "less",
+    "styl",
+    "makefile",
+    "dockerfile",
+    "gradle",
+    "proto",
 ];
 
 fn ext_of(path: &Path) -> String {
@@ -114,13 +186,13 @@ fn open_zip(path: &Path) -> Result<zip::ZipArchive<std::fs::File>, String> {
 }
 
 fn read_zip_entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Result<String, String> {
-    let f = zip
-        .by_name(name)
-        .map_err(|_| format!("缺少 {name}"))?;
+    let f = zip.by_name(name).map_err(|_| format!("缺少 {name}"))?;
     // 解压上限: docx/pptx 的 document.xml 解压后可远大于压缩包(zip 炸弹), 不封顶会 OOM。
     // 只读前 TEXT_READ_CAP 字节, 截断处回退到 UTF-8 字符边界, 抽正文足够。
     let mut buf = Vec::new();
-    f.take(TEXT_READ_CAP).read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    f.take(TEXT_READ_CAP)
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
     // 截断可能切在多字节 UTF-8 字符中间, 回退到最近的有效边界(至多回退 3 字节)。
     let s = match String::from_utf8(buf) {
         Ok(s) => s,
@@ -280,17 +352,18 @@ fn extract_spreadsheet(path: &Path) -> Result<String, String> {
             None => (1..=ncol).map(|i| format!("列{i}")).collect(),
         };
         out.push_str(&format!("| {} |\n", header_cells.join(" | ")));
-        out.push_str(&format!("|{}\n", " --- |".repeat(ncol.max(header_cells.len()))));
+        out.push_str(&format!(
+            "|{}\n",
+            " --- |".repeat(ncol.max(header_cells.len()))
+        ));
 
-        let mut count = 0usize;
-        for row in rows {
+        for (count, row) in rows.enumerate() {
             if count >= SHEET_ROW_CAP {
                 out.push_str(&format!("\n_（仅显示前 {SHEET_ROW_CAP} 行）_\n"));
                 break;
             }
             let cells: Vec<String> = row.iter().map(|c| md_cell(&cell_to_string(c))).collect();
             out.push_str(&format!("| {} |\n", cells.join(" | ")));
-            count += 1;
         }
     }
 
@@ -323,8 +396,7 @@ fn trim_float(f: f64) -> String {
 /// 转义 markdown 表格单元格：竖线与换行会破坏表格结构。
 fn md_cell(s: &str) -> String {
     s.replace('|', "\\|")
-        .replace('\r', " ")
-        .replace('\n', " ")
+        .replace(['\r', '\n'], " ")
         .trim()
         .to_string()
 }
@@ -353,7 +425,8 @@ mod tests {
 
     #[test]
     fn ooxml_handles_tabs_breaks_entities() {
-        let xml = "<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t><w:br/><w:t>c &amp; d</w:t></w:r></w:p>";
+        let xml =
+            "<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t><w:br/><w:t>c &amp; d</w:t></w:r></w:p>";
         let out = ooxml_text(xml);
         assert_eq!(out.trim(), "a\tb\nc & d");
     }
@@ -362,7 +435,10 @@ mod tests {
     fn entities_decoded_amp_last() {
         // &amp;lt; 必须只解一层 → "&lt;"，不能变成 "<"
         assert_eq!(decode_xml_entities("x &amp;lt; y"), "x &lt; y");
-        assert_eq!(decode_xml_entities("&lt;tag&gt; &quot;q&quot;"), "<tag> \"q\"");
+        assert_eq!(
+            decode_xml_entities("&lt;tag&gt; &quot;q&quot;"),
+            "<tag> \"q\""
+        );
     }
 
     #[test]

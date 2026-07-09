@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// 左侧统一导航栏：所有功能（大厅/生成/资料库/图谱/设置）收于此，点图标切换。
+// 左侧功能分区导航(PRD v6 五分区):大厅 / 生成 / 我的项目 / 模板库 / 设置。
 import { computed, ref } from "vue";
 import {
   platform,
   backToLobby,
-  goCreate,
-  goLibrary,
-  goGallery,
+  goStudio,
+  goProjects,
   goTemplates,
   goSettings,
 } from "./platform";
@@ -28,18 +27,20 @@ interface NavItem {
 // 内联 SVG 图标（stroke=currentColor，零依赖）
 const ICONS: Record<string, string> = {
   lobby: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg>`,
-  create: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M18.5 5.5 19 7l1.5.5L19 8l-.5 1.5L18 8l-1.5-.5L18 7z"/></svg>`,
+  studio: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/><path d="M14.5 5.5 18.5 9.5"/></svg>`,
   library: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2z"/><path d="M5 4v16"/><path d="M17 20h2V6"/></svg>`,
   gallery: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 14.6 9l6 .5-4.6 4 1.5 5.9L12 16.6 6.5 19.4 8 13.5 3.4 9.5l6-.5z"/></svg>`,
   graph: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M10.5 6.8 6.4 16M13.5 6.8 17.6 16M7 18h10"/></svg>`,
   templates: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="7" height="7" rx="1.2"/><rect x="13.5" y="4" width="7" height="4" rx="1.2"/><rect x="13.5" y="11" width="7" height="9" rx="1.2"/><rect x="3.5" y="14" width="7" height="6" rx="1.2"/></svg>`,
+  projects: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7A1.5 1.5 0 0 1 19 9.7"/><rect x="3" y="8.5" width="18" height="11.5" rx="1.8"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>`,
+  vnstudio: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="13" rx="2"/><path d="M8 21h8M12 17.5V21"/><path d="M6.5 13.5c1.2-2 2.4-3 3.5-3s2 1.5 3 1.5 2.2-1.8 4.5-2.5"/><circle cx="8" cy="8.4" r="1.1"/></svg>`,
 };
 
 const items = computed<NavItem[]>(() => [
   {
     key: "lobby",
-    label: "浮生阁",
+    label: "大厅",
     active: () =>
       platform.screen === "lobby" ||
       platform.screen === "play" ||
@@ -47,32 +48,27 @@ const items = computed<NavItem[]>(() => [
     go: backToLobby,
   },
   {
-    key: "create",
+    key: "studio",
     label: "生成",
-    active: () => platform.screen === "create",
-    go: goCreate,
+    active: () =>
+      platform.screen === "studio" || platform.screen === "vnstudio",
+    go: goStudio,
   },
   {
-    key: "library",
-    label: "资料库",
-    active: () => platform.screen === "library",
-    go: goLibrary,
-  },
-  {
-    key: "gallery",
-    label: "结局图鉴",
-    active: () => platform.screen === "gallery",
-    go: goGallery,
+    key: "projects",
+    label: "我的项目",
+    active: () => platform.screen === "projects",
+    go: goProjects,
   },
   {
     key: "templates",
-    label: "故事线模板",
+    label: "模板库",
     active: () => platform.screen === "templates",
     go: goTemplates,
   },
   {
     key: "settings",
-    label: "设置 · API",
+    label: "设置",
     active: () => platform.screen === "settings",
     go: goSettings,
   },
@@ -110,32 +106,26 @@ const items = computed<NavItem[]>(() => [
 </template>
 
 <style scoped>
+/* 悬浮玻璃坞:导航不再是"贴墙的一条",而是一枚悬在暖光里的琉璃岛 */
 .rail {
-  width: 88px;
+  width: 104px;
   height: 100vh;
   flex: none;
-  /* 无边框:从左侧暖褐极淡地渐隐到透明,与主区暖底无缝相融,萤火隐隐透过 */
-  background: linear-gradient(
-    90deg,
-    rgba(36, 23, 16, 0.55) 0%,
-    rgba(30, 19, 13, 0.32) 60%,
-    rgba(30, 19, 13, 0) 100%
-  );
-  border-right: none;
+  background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
   /* 顶部留出 44px 避让拖拽条与 macOS 红绿灯 */
-  padding: 44px 0 16px;
+  padding: 48px 0 18px 14px;
   position: relative;
   z-index: 40;
   overflow: hidden;
-  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width var(--dur) var(--ease), padding var(--dur) var(--ease);
 }
 /* 收起态：缩成一条窄边，只留印章作展开把手 */
 .rail.collapsed {
-  width: 30px;
-  padding: 44px 0 16px;
+  width: 34px;
+  padding: 48px 0 18px 6px;
 }
 .rail.collapsed .nav,
 .rail.collapsed .foot {
@@ -143,10 +133,10 @@ const items = computed<NavItem[]>(() => [
   pointer-events: none;
 }
 .rail.collapsed .seal {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin-bottom: 0;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .rail.collapsed .seal-char {
   display: none;
@@ -159,23 +149,31 @@ const items = computed<NavItem[]>(() => [
   position: relative;
   width: 52px;
   height: 52px;
-  border: 1.5px solid #b5654a;
-  border-radius: 8px;
-  background: rgba(181, 101, 74, 0.12);
-  color: #cf8466;
+  border: 1px solid rgba(227, 179, 65, 0.5);
+  border-radius: 14px;
+  background: rgba(227, 179, 65, 0.12);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--edge-hi), 0 6px 22px rgba(0, 0, 0, 0.3);
+  color: #e9c05e;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 28px;
-  transition: 0.2s;
+  margin-bottom: 20px;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    background var(--dur) var(--ease);
 }
 .seal:hover {
-  background: rgba(181, 101, 74, 0.22);
-  box-shadow: 0 0 18px rgba(181, 101, 74, 0.35);
+  background: rgba(227, 179, 65, 0.2);
+  box-shadow: var(--edge-hi), 0 8px 28px rgba(0, 0, 0, 0.34), 0 0 22px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.seal:active {
+  transform: scale(0.96);
 }
 .seal-char {
-  font-family: "Songti SC", "SimSun", serif;
+  font-family: var(--f-serif);
   font-size: 16px;
   line-height: 1.05;
   letter-spacing: 0.04em;
@@ -183,62 +181,64 @@ const items = computed<NavItem[]>(() => [
 }
 .chev {
   position: absolute;
-  right: -2px;
-  bottom: -1px;
-  font-size: 13px;
+  right: 3px;
+  bottom: 2px;
+  font-size: 12px;
   line-height: 1;
-  color: #cf8466;
-  opacity: 0.75;
+  color: #e9c05e;
+  opacity: 0.7;
 }
+/* 玻璃岛本体:一整块竖向琉璃,承载全部导航 */
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 100%;
+  gap: 4px;
   align-items: center;
+  padding: 10px 8px;
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi), var(--shadow-md);
+  transition: opacity var(--dur) var(--ease);
 }
 .navbtn {
-  width: 72px;
-  padding: 11px 0 9px;
+  width: 68px;
+  padding: 10px 0 8px;
   border: none;
   background: transparent;
-  border-radius: 12px;
-  color: #7c828c;
+  border-radius: var(--r-md);
+  color: #7e8ea3;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  transition: 0.2s;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
   position: relative;
 }
 .navbtn:hover {
-  color: #f0e2cf;
-  background: rgba(224, 150, 88, 0.08);
+  color: var(--text-hi);
+  background: rgba(226, 238, 252, 0.06);
+}
+.navbtn:active {
+  transform: scale(0.95);
 }
 .navbtn.on {
-  color: #f6ecd8;
-  background: rgba(201, 120, 79, 0.18);
-}
-.navbtn.on::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 22px;
-  border-radius: 2px;
-  background: #c98b6b;
+  color: var(--text-hi);
+  background: linear-gradient(180deg, rgba(227, 179, 65, 0.22), rgba(227, 179, 65, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 .ico {
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
   display: block;
 }
 .ico :deep(svg) {
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
 }
 .lbl {
   font-size: 10.5px;
@@ -246,11 +246,12 @@ const items = computed<NavItem[]>(() => [
 }
 .foot {
   margin-top: auto;
-  font-family: "Songti SC", "SimSun", serif;
+  font-family: var(--f-serif);
   font-size: 12px;
   line-height: 1.3;
-  letter-spacing: 0.1em;
-  color: #3f444c;
+  letter-spacing: 0.12em;
+  color: rgba(147, 165, 187, 0.32);
   text-align: center;
+  transition: opacity var(--dur) var(--ease);
 }
 </style>

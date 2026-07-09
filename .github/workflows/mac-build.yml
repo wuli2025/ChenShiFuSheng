@@ -28,7 +28,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
       # audiopus_sys(Opus) 走 autogen.sh 从源码编译, 需要 autoreconf/libtool, macos runner 默认没装
       - name: Install native build tools (autoconf/automake/libtool)
@@ -45,7 +46,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install frontend deps
-        run: npm install
+        run: npm ci
 
       - name: Build unsigned universal .dmg & publish release
         # 即便发 Release 这步因 token 权限失败, 也要继续到下面把 .dmg 传成工件可下载。

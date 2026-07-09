@@ -8,14 +8,16 @@
 //! - 整合 conv 模块, 自动写 user/assistant 消息
 
 use crate::claude_md;
-use crate::convert;
 use crate::conv;
+use crate::convert;
+#[cfg(not(feature = "desktop"))]
+use crate::host::AppHandle;
 use crate::kb;
 use crate::skills;
+use directories::UserDirs;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use directories::UserDirs;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -25,8 +27,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(feature = "desktop")]
 use tauri::{AppHandle, Emitter};
-#[cfg(not(feature = "desktop"))]
-use crate::host::AppHandle;
 use walkdir::WalkDir;
 
 #[cfg(windows)]
@@ -204,7 +204,8 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
         .conversation_id
         .as_deref()
         .and_then(conv::project_id_of_conversation);
-    let cm_ctx = claude_md::render_for_project(current_project_id.as_deref(), &args.prompt, args.use_kb);
+    let cm_ctx =
+        claude_md::render_for_project(current_project_id.as_deref(), &args.prompt, args.use_kb);
 
     let mut final_prompt = String::new();
 
@@ -229,7 +230,7 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
     // 1b. 按任务意图自动激活（即使对话框没点选）：
     //     创建技能 → skill-creator；网页/浏览器自动化 → cloak-browser
     for (meta, system_prompt) in skills::auto_skills_for_intent(&args.prompt) {
-        if injected.iter().any(|x| *x == meta.id) {
+        if injected.contains(&meta.id) {
             continue;
         }
         skill_section.push_str(&system_prompt);
@@ -335,7 +336,11 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
     //     **确定性地**插入这句中文说明(见下方 image_notice), 保证用户一上来就看到。
     let image_notice: Option<String> = if skills::detect_image_intent(&args.prompt) {
         let (provider_name, supported) = crate::provider::image_gen_capability();
-        final_prompt.push_str(&image_capability_directive(&provider_name, supported, &art_dir));
+        final_prompt.push_str(&image_capability_directive(
+            &provider_name,
+            supported,
+            &art_dir,
+        ));
         final_prompt.push_str("\n\n---\n\n");
         if supported {
             None
@@ -359,7 +364,8 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
     //     让模型可直接 Read「上次那个文件」, 用户不用重新拖拽。当前对话排除(它的文件
     //     已在下面的对话历史里出现)。
     if let Some(pid) = current_project_id.as_deref() {
-        let amap = project_artifacts_block(pid, args.conversation_id.as_deref(), ARTIFACT_MAP_BUDGET);
+        let amap =
+            project_artifacts_block(pid, args.conversation_id.as_deref(), ARTIFACT_MAP_BUDGET);
         if !amap.is_empty() {
             final_prompt.push_str(&amap);
             final_prompt.push_str("\n\n---\n\n");
@@ -553,7 +559,11 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
                 continue;
             }
             *act_out.lock() = std::time::Instant::now(); // 刷新活动: 流式产出即视为推进, 防误杀
-            let target = if capped { &mut scrap } else { &mut assistant_text };
+            let target = if capped {
+                &mut scrap
+            } else {
+                &mut assistant_text
+            };
             match serde_json::from_str::<Value>(&line) {
                 Ok(v) if is_codex => handle_codex_event(
                     &app_out,
@@ -680,9 +690,7 @@ pub async fn chat_send(app: AppHandle, args: ChatSendArgs) -> Result<String, Str
                 return Path::new(dir).is_dir();
             }
             let pb = Path::new(p);
-            pb.is_file()
-                && is_displayable_artifact(p)
-                && packaged_project_root(pb).is_none()
+            pb.is_file() && is_displayable_artifact(p) && packaged_project_root(pb).is_none()
         });
 
         // 持久化 assistant 消息 (产物清单以注释 marker 形式存入正文, 重载历史时解析)
@@ -928,7 +936,11 @@ fn handle_codex_event(
         let msg = v
             .get("message")
             .and_then(|x| x.as_str())
-            .or_else(|| v.get("error").and_then(|e| e.get("message")).and_then(|x| x.as_str()))
+            .or_else(|| {
+                v.get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|x| x.as_str())
+            })
             .unwrap_or("codex 返回错误")
             .to_string();
         emit_event(
@@ -1063,7 +1075,12 @@ fn handle_codex_event(
 
 // (Docker-in-Docker 沙箱执行路径已随 polaris-sandbox 板块下线 —— 游戏平台只在宿主机直跑 claude。)
 
-fn spawn_on_host(prompt: &str, perm: &str, art_dir: &Path, with_task: bool) -> Result<Child, String> {
+fn spawn_on_host(
+    prompt: &str,
+    perm: &str,
+    art_dir: &Path,
+    with_task: bool,
+) -> Result<Child, String> {
     let perm_flag = format!("--permission-mode={}", perm);
     // cwd = polaris-app 根 (env!("CARGO_MANIFEST_DIR") 的父级),
     // 这样 claude CLI 自动信任整棵 polaris-app/ 子树, 包括 PolarisKB/
@@ -1153,7 +1170,12 @@ fn spawn_on_host(prompt: &str, perm: &str, art_dir: &Path, with_task: bool) -> R
 /// - 其余(手动/自动) → `--dangerously-bypass-approvals-and-sandbox`(headless 无人审批,
 ///   全自动放行本地读写执行 —— 与 claude headless 放行 Bash/PowerShell/文件、acceptEdits 等价,
 ///   否则做图/做 PPT 要跑脚本时会卡在审批上)。
-fn spawn_codex_on_host(prompt: &str, perm: &str, art_dir: &Path, _with_task: bool) -> Result<Child, String> {
+fn spawn_codex_on_host(
+    prompt: &str,
+    perm: &str,
+    art_dir: &Path,
+    _with_task: bool,
+) -> Result<Child, String> {
     let cwd = claude_md::project_root().unwrap_or_else(|| {
         std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
     });
@@ -1200,8 +1222,12 @@ fn spawn_codex_on_host(prompt: &str, perm: &str, art_dir: &Path, _with_task: boo
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    cmd.spawn()
-        .map_err(|e| format!("调起 codex CLI 失败: {}(可在设置里切回 Claude 引擎, 或先 `codex login` 授权 ChatGPT)", e))
+    cmd.spawn().map_err(|e| {
+        format!(
+            "调起 codex CLI 失败: {}(可在设置里切回 Claude 引擎, 或先 `codex login` 授权 ChatGPT)",
+            e
+        )
+    })
 }
 
 // ───────────────────────── Artifacts (产物预览) ─────────────────────────
@@ -1217,10 +1243,8 @@ const DISPLAY_EXTS: &[&str] = &[
     // 文档
     "md", "markdown", "txt", "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv",
     // 网页成品
-    "html", "htm",
-    // 图片
-    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "ico",
-    // 视频 / 音频
+    "html", "htm", // 图片
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "ico", // 视频 / 音频
     "mp4", "mov", "webm", "mkv", "avi", "mp3", "wav", "m4a", "aac", "flac", "ogg",
     // 打包交付
     "zip",
@@ -1381,14 +1405,21 @@ fn history_block(conv_id: &str, budget: usize) -> String {
     let mut used = 0usize;
     for m in msgs.iter().rev() {
         let line = match m.role.as_str() {
-            "user" => format!("**用户**：{}", truncate_chars(m.content.trim(), HISTORY_MSG_CAP)),
+            "user" => format!(
+                "**用户**：{}",
+                truncate_chars(m.content.trim(), HISTORY_MSG_CAP)
+            ),
             "assistant" => {
                 let (clean, files) = split_artifacts(&m.content);
                 let body = truncate_chars(clean.trim(), HISTORY_MSG_CAP);
                 if files.is_empty() {
                     format!("**助手**：{}", body)
                 } else {
-                    format!("**助手**：{}\n〔本轮生成文件：{}〕", body, files.join(" · "))
+                    format!(
+                        "**助手**：{}\n〔本轮生成文件：{}〕",
+                        body,
+                        files.join(" · ")
+                    )
                 }
             }
             _ => continue, // tool 等其它角色不进历史
@@ -1451,7 +1482,10 @@ fn project_artifacts_block(project_id: &str, exclude_conv: Option<&str>, budget:
             let line = if desc_short.is_empty() {
                 format!("- `{}` — 来自对话「{}」· {}", path, c.title, date)
             } else {
-                format!("- `{}` — 来自对话「{}」({}) · 当时请求: {}", path, c.title, date, desc_short)
+                format!(
+                    "- `{}` — 来自对话「{}」({}) · 当时请求: {}",
+                    path, c.title, date, desc_short
+                )
             };
             let cost = line.chars().count() + 1;
             if used + cost > budget && !lines.is_empty() {
@@ -1874,7 +1908,7 @@ fn dynamic_workflow_directive() -> String {
 /// 标准 Base64 编码 (无外部依赖) — 给图片产物拼 data URL 用
 fn base64_encode(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;
         let b1 = *chunk.get(1).unwrap_or(&0) as u32;
@@ -2100,7 +2134,9 @@ pub fn artifact_write(path: String, content: String) -> Result<(), String> {
     let parent = p.parent().ok_or("无法定位父目录")?;
     let tmp = parent.join(format!(
         ".{}.polaris-tmp",
-        p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+        p.file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default()
     ));
     std::fs::write(&tmp, content.as_bytes()).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &p).map_err(|e| {
@@ -2176,7 +2212,7 @@ pub fn artifact_list(conversation_id: Option<String>) -> Vec<ArtifactEntry> {
             modified,
         });
     }
-    entries.sort_by(|a, b| b.modified.cmp(&a.modified));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.modified));
     entries
 }
 
@@ -2305,7 +2341,13 @@ pub fn artifact_search(query: String) -> Vec<ArtifactSearchHit> {
                     let lower = body.to_lowercase();
                     if let Some(pos) = lower.find(&q) {
                         score += 2;
-                        let start = body[..pos].char_indices().rev().take(40).last().map(|(i, _)| i).unwrap_or(0);
+                        let start = body[..pos]
+                            .char_indices()
+                            .rev()
+                            .take(40)
+                            .last()
+                            .map(|(i, _)| i)
+                            .unwrap_or(0);
                         let end = (pos + q.len() + 60).min(body.len());
                         let mut e = end;
                         while e < body.len() && !body.is_char_boundary(e) {
@@ -2353,10 +2395,7 @@ pub struct AttachedFile {
 /// 与「知识库上传」是两条不同的路径 —— 这里只把文件挂到当前对话,
 /// 前端发送时把这些绝对路径写进 prompt,claude 用 Read 工具按需读取。
 #[cfg_attr(feature = "desktop", tauri::command)]
-pub fn chat_attach_files(
-    conversation_id: Option<String>,
-    paths: Vec<String>,
-) -> Vec<AttachedFile> {
+pub fn chat_attach_files(conversation_id: Option<String>, paths: Vec<String>) -> Vec<AttachedFile> {
     const MAX: usize = 50;
     let dir = conversation_dir(conversation_id.as_deref()).join("uploads");
     let _ = std::fs::create_dir_all(&dir);
@@ -2414,7 +2453,11 @@ pub fn chat_attach_image(
         .chars()
         .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
         .collect();
-    let safe = if safe.trim().is_empty() { "pasted.png".to_string() } else { safe };
+    let safe = if safe.trim().is_empty() {
+        "pasted.png".to_string()
+    } else {
+        safe
+    };
     let dst = unique_upload_path(&dir, &safe);
     std::fs::write(&dst, &bytes).map_err(|e| e.to_string())?;
     Ok(AttachedFile {
@@ -2474,11 +2517,17 @@ pub fn open_url(url: String) -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").arg(u).spawn().map_err(|e| e.to_string())?;
+        Command::new("open")
+            .arg(u)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        Command::new("xdg-open").arg(u).spawn().map_err(|e| e.to_string())?;
+        Command::new("xdg-open")
+            .arg(u)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -2486,8 +2535,16 @@ pub fn open_url(url: String) -> Result<(), String> {
 /// 从 tool_use 的 input JSON 里提一行人能看懂的摘要(命令/文件路径/检索词)。
 fn tool_input_summary(input: &serde_json::Value) -> Option<String> {
     const KEYS: [&str; 10] = [
-        "command", "file_path", "notebook_path", "pattern", "query", "url",
-        "description", "prompt", "path", "skill",
+        "command",
+        "file_path",
+        "notebook_path",
+        "pattern",
+        "query",
+        "url",
+        "description",
+        "prompt",
+        "path",
+        "skill",
     ];
     for k in KEYS {
         if let Some(s) = input.get(k).and_then(|x| x.as_str()) {
@@ -2527,8 +2584,18 @@ fn push_attach(dir: &Path, src: &Path, out: &mut Vec<AttachedFile>) {
                 .to_lowercase();
             let convertible = matches!(
                 ext.as_str(),
-                "pdf" | "docx" | "doc" | "xlsx" | "xls" | "xlsm"
-                    | "xlsb" | "pptx" | "ppt" | "ods" | "odt" | "odp"
+                "pdf"
+                    | "docx"
+                    | "doc"
+                    | "xlsx"
+                    | "xls"
+                    | "xlsm"
+                    | "xlsb"
+                    | "pptx"
+                    | "ppt"
+                    | "ods"
+                    | "odt"
+                    | "odp"
             );
             if convertible {
                 match convert::convert_to_markdown(src) {
@@ -2640,22 +2707,36 @@ mod tests {
         let content = "已生成报告。\n\n<!--POLARIS_ARTIFACTS:[\"D:/a/r.html\",\"D:/a/r.md\"]-->";
         let (clean, paths) = split_artifacts(content);
         assert_eq!(clean, "已生成报告。");
-        assert_eq!(paths, vec!["D:/a/r.html".to_string(), "D:/a/r.md".to_string()]);
+        assert_eq!(
+            paths,
+            vec!["D:/a/r.html".to_string(), "D:/a/r.md".to_string()]
+        );
     }
 
     #[test]
     fn displayable_artifact_whitelists_common_formats_only() {
         // 常见成品: 进对话框
         for p in [
-            "D:/a/report.html", "D:/a/读书笔记.MD", "D:/a/v.mp4", "D:/a/讲解.mp3",
-            "D:/a/图.png", "D:/a/слайды.pptx", "D:/a/简历.docx", "D:/a/r.pdf",
+            "D:/a/report.html",
+            "D:/a/读书笔记.MD",
+            "D:/a/v.mp4",
+            "D:/a/讲解.mp3",
+            "D:/a/图.png",
+            "D:/a/слайды.pptx",
+            "D:/a/简历.docx",
+            "D:/a/r.pdf",
         ] {
             assert!(is_displayable_artifact(p), "{p} 应展示");
         }
         // 脚本 / 配置 / 无后缀等中间产物: 不进对话框
         for p in [
-            "D:/a/build.py", "D:/a/index.js", "D:/a/package.json", "D:/a/run.sh",
-            "D:/a/Makefile", "D:/a/data.sqlite", "D:/a/启动应用.bat",
+            "D:/a/build.py",
+            "D:/a/index.js",
+            "D:/a/package.json",
+            "D:/a/run.sh",
+            "D:/a/Makefile",
+            "D:/a/data.sqlite",
+            "D:/a/启动应用.bat",
         ] {
             assert!(!is_displayable_artifact(p), "{p} 不应展示");
         }

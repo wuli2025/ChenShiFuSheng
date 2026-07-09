@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { GAMES } from "./games";
 import { EXTERNAL_GAMES } from "./externalGames";
-import { enterGame, enterExternal, goCreate } from "./platform";
+import { enterGame, enterExternal, goStudio } from "./platform";
 import { listGames, removeGame } from "./gamesStore";
 import { hasRun, unlockedCount } from "./saves";
 import { toast } from "../composables/useToast";
@@ -83,15 +83,15 @@ function onRemove(id: string, e: Event) {
     </header>
 
     <div class="wall">
-      <!-- 生成新游戏 -->
-      <button class="card create" @click="goCreate">
+      <!-- 创作工坊:嵌入画布引擎工作台(双剧本线路 + codex 生图) -->
+      <button class="card create" @click="goStudio">
         <div class="cover create-cover"><span class="plus">＋</span></div>
         <div class="meta">
-          <div class="tag">生成</div>
-          <div class="name">生成新游戏</div>
-          <div class="desc">上传资料 · 选剧本副本 · 描述需求 → 由 AI 生成</div>
+          <div class="tag">创作</div>
+          <div class="name">创作工坊</div>
+          <div class="desc">一句话意图 → AI 写剧本 → 定稿生图 → 出成品(人生画布 / 灵动叙事)</div>
         </div>
-        <div class="enter">去生成 →</div>
+        <div class="enter">去创作 →</div>
       </button>
 
       <button
@@ -138,20 +138,21 @@ function onRemove(id: string, e: Event) {
   overflow-y: auto;
   /* 透明:让平台底的暖色氛围动效透上来,大厅与窗口融为一体的暖底 */
   background: transparent;
-  color: #e6d8c2;
-  padding: 56px 56px 40px;
-  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text);
+  padding: 60px 56px 40px;
+  font-family: var(--f-sans);
 }
-.lobby-head { text-align: center; margin-bottom: 46px; position: relative; }
+.lobby-head { text-align: center; margin-bottom: 50px; position: relative; }
 .title {
-  font-family: "Songti SC", "SimSun", serif;
-  font-size: 40px;
+  font-family: var(--f-serif);
+  font-size: 42px;
+  font-weight: 500;
   letter-spacing: 0.5em;
-  color: #f4e6cd;
+  color: var(--text-hi);
   text-indent: 0.5em;
-  text-shadow: 0 2px 30px rgba(224, 150, 88, 0.35);
+  text-shadow: 0 2px 34px rgba(227, 179, 65, 0.32);
 }
-.sub { margin-top: 14px; font-size: 13px; letter-spacing: 0.2em; color: #9c8366; }
+.sub { margin-top: 16px; font-size: 13px; letter-spacing: 0.24em; color: var(--text-mut); }
 .nav { margin-top: 22px; display: flex; gap: 12px; justify-content: center; }
 .nav button {
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -175,34 +176,42 @@ function onRemove(id: string, e: Event) {
 .card {
   appearance: none;
   text-align: left;
-  /* 无硬边框:极淡暖膜浮于氛围之上,靠柔光与背景相融 */
-  border: 1px solid transparent;
-  background: linear-gradient(165deg, rgba(58, 38, 24, 0.34), rgba(28, 18, 12, 0.18));
-  border-radius: 16px;
+  /* 琉璃卡:后景暖光被吸进玻璃里,顶缘一线高光交代厚度 */
+  border: 1px solid var(--hairline);
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border-radius: var(--r-lg);
   overflow: hidden;
   cursor: pointer;
   padding: 0;
   color: inherit;
-  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
+  transition: transform 0.38s var(--ease), box-shadow 0.38s var(--ease),
+    background 0.38s var(--ease), border-color 0.38s var(--ease);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
 }
 .card:not(.disabled):hover {
-  transform: translateY(-6px);
-  background: linear-gradient(165deg, rgba(72, 47, 29, 0.5), rgba(34, 22, 14, 0.3));
+  transform: translateY(-6px) scale(1.012);
+  background: rgba(34, 48, 70, 0.42);
+  border-color: var(--hairline-strong);
   box-shadow:
-    0 26px 60px rgba(0, 0, 0, 0.45),
-    0 0 50px -8px var(--accent, #c98b6b);
+    var(--edge-hi-strong),
+    0 30px 70px rgba(0, 0, 0, 0.5),
+    0 0 56px -10px var(--accent, #c98b6b);
+}
+.card:not(.disabled):active {
+  transform: translateY(-2px) scale(0.995);
 }
 .card.disabled { cursor: not-allowed; opacity: 0.5; }
 .card.create {
-  background: linear-gradient(165deg, rgba(201, 139, 107, 0.14), rgba(40, 26, 16, 0.18));
-  box-shadow: inset 0 0 0 1px rgba(224, 150, 88, 0.22), 0 8px 30px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(165deg, rgba(227, 179, 65, 0.13), rgba(24, 34, 52, 0.24));
+  border-color: rgba(227, 179, 65, 0.28);
 }
 .cover { position: relative; aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; }
-.create-cover { background: radial-gradient(120% 120% at 50% 30%, #3a2615, #1b110a); }
-.plus { font-size: 54px; color: #e0a96d; text-shadow: 0 0 24px rgba(224, 150, 88, 0.5); }
+.create-cover { background: radial-gradient(120% 120% at 50% 30%, #1c2b46, #0b111d); }
+.plus { font-size: 54px; color: #e3b341; text-shadow: 0 0 24px rgba(227, 179, 65, 0.5); }
 .glyph {
   font-family: "Songti SC", "SimSun", serif;
   font-size: 72px;
@@ -214,41 +223,51 @@ function onRemove(id: string, e: Event) {
   top: 12px;
   font-size: 11px;
   letter-spacing: 0.2em;
-  color: #b9b2a3;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 2px 8px;
-  border-radius: 999px;
+  color: #cabfa9;
+  border: 1px solid var(--hairline-strong);
+  background: rgba(20, 13, 9, 0.4);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
 }
 .lock { right: 12px; }
-.gen-badge { left: 12px; color: #cf8466; border-color: rgba(201, 139, 107, 0.5); }
+.gen-badge { left: 12px; color: #e9c05e; border-color: rgba(227, 179, 65, 0.42); }
 .del {
   position: absolute;
   top: 10px;
   right: 12px;
-  width: 22px;
-  height: 22px;
-  line-height: 20px;
+  width: 24px;
+  height: 24px;
+  line-height: 22px;
   text-align: center;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(20, 13, 9, 0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline);
   color: #cfc8ba;
-  font-size: 16px;
+  font-size: 15px;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .del:hover { background: rgba(180, 60, 50, 0.6); color: #fff; }
 .meta { padding: 18px 20px 16px; flex: 1; }
 .tag { font-size: 11px; letter-spacing: 0.18em; color: var(--accent, #e0a96d); margin-bottom: 10px; }
-.name { font-family: "Songti SC", "SimSun", serif; font-size: 22px; letter-spacing: 0.12em; color: #f4e9d6; }
-.desc { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #a3917a; }
+.name { font-family: var(--f-serif); font-size: 22px; letter-spacing: 0.12em; color: var(--text-hi); }
+.desc { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: var(--text-mut); }
 .run-badge {
   position: absolute;
   bottom: 12px;
   left: 12px;
   font-size: 11px;
   letter-spacing: 0.2em;
-  color: #e7ddc9;
-  background: rgba(201, 139, 107, 0.85);
-  padding: 2px 9px;
-  border-radius: 999px;
+  color: #10141c;
+  background: rgba(227, 179, 65, 0.85);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 .end-badge {
   position: absolute;
@@ -256,12 +275,15 @@ function onRemove(id: string, e: Event) {
   right: 12px;
   font-size: 11px;
   letter-spacing: 0.12em;
-  color: #cf8466;
-  border: 1px solid rgba(201, 139, 107, 0.5);
-  background: rgba(0, 0, 0, 0.35);
-  padding: 2px 9px;
-  border-radius: 999px;
+  color: #e9c05e;
+  border: 1px solid rgba(227, 179, 65, 0.42);
+  background: rgba(9, 14, 24, 0.42);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
 }
-.enter { padding: 0 20px 18px; font-size: 13px; letter-spacing: 0.1em; color: var(--accent, #e0a96d); }
-.lobby-foot { margin-top: 56px; text-align: center; font-size: 11px; letter-spacing: 0.3em; color: #6b5740; }
+.enter { padding: 0 20px 18px; font-size: 13px; letter-spacing: 0.1em; color: var(--accent, #e0a96d); transition: letter-spacing var(--dur) var(--ease); }
+.card:not(.disabled):hover .enter { letter-spacing: 0.18em; }
+.lobby-foot { margin-top: 60px; text-align: center; font-size: 11px; letter-spacing: 0.32em; color: rgba(147, 165, 187, 0.45); }
 </style>

@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import "./glass.css";
 import { platform } from "./platform";
 import GameSidebar from "./GameSidebar.vue";
 import GameLobby from "./GameLobby.vue";
 import GameView from "./GameView.vue";
-import GameCreate from "./GameCreate.vue";
+import GameStudio from "./GameStudio.vue";
+import GameVnStudio from "./GameVnStudio.vue";
+import GameProjects from "./GameProjects.vue";
+import GameTemplates from "./GameTemplates.vue";
 import GameLibrary from "./GameLibrary.vue";
 import GameGallery from "./GameGallery.vue";
-import GameTemplates from "./GameTemplates.vue";
 import GameSettings from "./GameSettings.vue";
 import GameExternal from "./GameExternal.vue";
 import WarmAura from "./WarmAura.vue";
@@ -24,10 +27,16 @@ import WarmAura from "./WarmAura.vue";
     <main class="content">
       <Transition name="fade" mode="out-in">
         <GameLobby v-if="platform.screen === 'lobby'" key="lobby" />
-        <GameCreate v-else-if="platform.screen === 'create'" key="create" />
+        <!-- 创作工坊:嵌入画布引擎工作台,旧版对话式生成(create/templates)已由它取代 -->
+        <GameStudio v-else-if="platform.screen === 'studio'" key="studio" />
+        <!-- 灵动工坊:原生 VN 动效叙事生产线(claude写稿+codex立绘/场景+灵动引擎试玩/导出) -->
+        <GameVnStudio v-else-if="platform.screen === 'vnstudio'" key="vnstudio" />
+        <!-- 我的项目:用户自己生成的剧本工程,试玩/编辑/发布 -->
+        <GameProjects v-else-if="platform.screen === 'projects'" key="projects" />
+        <!-- 模板库:故事线模板,一键带骨架去生成 -->
+        <GameTemplates v-else-if="platform.screen === 'templates'" key="templates" />
         <GameLibrary v-else-if="platform.screen === 'library'" key="library" />
         <GameGallery v-else-if="platform.screen === 'gallery'" key="gallery" />
-        <GameTemplates v-else-if="platform.screen === 'templates'" key="templates" />
         <GameSettings v-else-if="platform.screen === 'settings'" key="settings" />
         <GameExternal v-else-if="platform.screen === 'external'" key="external" />
         <!-- 体验：内置精修剧本与 AI 生成剧本统一走沉浸式播放器 GameView -->
@@ -41,22 +50,22 @@ import WarmAura from "./WarmAura.vue";
 .platform {
   display: flex;
   height: 100vh;
-  /* 暖色烛光底:深暖褐 + 顶部一抹琥珀辉光,作为氛围动效的底色 */
+  /* 墨蓝夜色底:深海墨蓝 + 顶部一抹微光,与创作工坊(画布引擎)同一块夜空 */
   background:
-    radial-gradient(120% 85% at 50% -10%, #3a2618 0%, #241710 38%, #150d09 72%, #0f0907 100%);
+    radial-gradient(120% 85% at 50% -10%, #182741 0%, #0e1626 38%, #090e18 72%, #06090f 100%);
   overflow: hidden;
   position: relative;
 }
-/* 呼吸式暖光晕:多枚暖色辉光缓缓明灭,铺满最底层 */
+/* 呼吸式极光晕:金/青/墨蓝三色辉光缓缓明灭,铺满最底层 */
 .glow {
   position: absolute;
   inset: -10%;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(40% 38% at 22% 18%, rgba(224, 150, 88, 0.16), transparent 70%),
-    radial-gradient(46% 42% at 82% 30%, rgba(201, 120, 79, 0.14), transparent 72%),
-    radial-gradient(50% 48% at 50% 108%, rgba(232, 174, 104, 0.12), transparent 70%);
+    radial-gradient(40% 38% at 22% 18%, rgba(227, 179, 65, 0.1), transparent 70%),
+    radial-gradient(46% 42% at 82% 30%, rgba(88, 196, 220, 0.08), transparent 72%),
+    radial-gradient(50% 48% at 50% 108%, rgba(56, 88, 128, 0.22), transparent 70%);
   animation: breathe 14s ease-in-out infinite;
 }
 @keyframes breathe {

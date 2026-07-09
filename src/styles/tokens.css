@@ -1,0 +1,41 @@
+/* 奶油琉璃设计系统 · 单一真源
+ * 逐字采用 docs/PRD-工作流重构-v5.html §03 的 token。
+ * 所有 src/ui、src/icons、src/platform 组件只准引用 var(),禁止字面量颜色。
+ */
+:root {
+  /* 奶油底 */
+  --cream-0: #faf7f1;
+  --cream-1: #f3eee5;
+  --cream-2: #ece5d8;
+  /* 琉璃面板 */
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-line: rgba(190, 175, 150, 0.35);
+  --glass-blur: 18px;
+  /* 墨色文字 */
+  --ink-1: #2b2620;
+  --ink-2: #6b6357;
+  --ink-3: #9c917f;
+  /* 点缀 */
+  --amber: #b98a2e;
+  --amber-soft: #d4a94f;
+  --jade: #4f9d7a;
+  --coral: #c96f5f;
+  --azure: #5b8fb3;
+  --grad-amber: linear-gradient(135deg, #d4a94f, #b98a2e);
+  /* 几何:圆角 20/14/9 */
+  --r-lg: 20px;
+  --r-md: 14px;
+  --r-sm: 9px;
+  /* 间距 4/8/16/24/40 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 16px;
+  --sp-4: 24px;
+  --sp-5: 40px;
+  /* 阴影两档 */
+  --shadow-1: 0 2px 10px -4px rgba(90, 75, 50, 0.12);
+  --shadow-2: 0 10px 34px -14px rgba(90, 75, 50, 0.22);
+  --mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}

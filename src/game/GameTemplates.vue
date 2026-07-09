@@ -223,9 +223,12 @@ function layerNo(id: string): string {
 .prosbar { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 26px; }
 @media (max-width: 720px) { .prosbar { grid-template-columns: 1fr; } }
 .pc {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px; padding: 16px 18px;
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
+  border-radius: var(--r-md); padding: 16px 18px;
 }
 .pc.good { border-top: 3px solid #3f6b4f; }
 .pc.warn { border-top: 3px solid #9e3b32; }
@@ -245,9 +248,12 @@ function layerNo(id: string): string {
 .layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .layer {
   display: flex; gap: 12px;
-  background: rgba(255, 255, 255, 0.028);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px; padding: 13px 15px;
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi);
+  border-radius: var(--r-md); padding: 13px 15px;
 }
 .lno {
   flex: none; font-family: "Songti SC", serif; font-size: 20px;
@@ -263,21 +269,38 @@ function layerNo(id: string): string {
 /* —— 筛选 —— */
 .tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .tab {
-  border: 1px solid rgba(255, 255, 255, 0.14); background: transparent;
-  color: #b0a998; border-radius: 20px; padding: 5px 16px; font-size: 13px; cursor: pointer; transition: 0.18s;
+  border: 1px solid var(--hairline-strong);
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  color: #b0a998; border-radius: var(--r-pill); padding: 6px 18px; font-size: 13px; cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
 }
-.tab:hover { color: #f0e9da; border-color: #c98b6b; }
-.tab.on { background: rgba(201, 120, 79, 0.2); border-color: #b5654a; color: #f6ecd8; }
+.tab:hover { color: var(--text-hi); border-color: var(--accent); }
+.tab.on {
+  background: rgba(201, 120, 79, 0.24); border-color: var(--accent-deep); color: var(--text-hi);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 230, 0.12);
+}
 .count { margin-left: auto; font-size: 12px; color: #6c727c; }
 
 /* —— 模板卡 —— */
 .cards { display: flex; flex-direction: column; gap: 14px; }
 .card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px; padding: 16px 20px; transition: 0.2s;
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border: 1px solid var(--hairline);
+  box-shadow: var(--edge-hi), var(--shadow-sm);
+  border-radius: var(--r-lg); padding: 16px 20px;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
-.card.open { border-color: rgba(201, 139, 107, 0.4); background: rgba(255, 255, 255, 0.045); }
+.card.open {
+  border-color: rgba(201, 139, 107, 0.38);
+  background: rgba(60, 39, 24, 0.36);
+  box-shadow: var(--edge-hi-strong), var(--shadow-md);
+}
 .chead { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
 .ctitle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .name { font-family: "Songti SC", serif; font-size: 18px; color: #f0e9da; letter-spacing: 0.06em; }
@@ -327,11 +350,14 @@ function layerNo(id: string): string {
 
 .actions { display: flex; gap: 10px; margin-top: 18px; }
 .act {
-  border: 1px solid rgba(255, 255, 255, 0.18); background: transparent;
-  color: #cfc8ba; border-radius: 8px; padding: 8px 18px; font-size: 13px; cursor: pointer; transition: 0.18s;
+  border: 1px solid var(--hairline-strong); background: transparent;
+  color: var(--text); border-radius: var(--r-pill); padding: 8px 20px; font-size: 13px; cursor: pointer;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease),
+    background var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.act:hover { border-color: #c98b6b; color: #f0e9da; }
-.act.primary { border-color: #b5654a; background: rgba(201, 139, 107, 0.18); color: #f0e9da; }
+.act:hover { border-color: var(--accent); color: var(--text-hi); transform: translateY(-1px); }
+.act:active { transform: scale(0.97); }
+.act.primary { border-color: var(--accent-deep); background: rgba(201, 139, 107, 0.18); color: var(--text-hi); }
 
 .foot { margin-top: 34px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11.5px; color: #6c727c; text-align: center; line-height: 1.7; }
 

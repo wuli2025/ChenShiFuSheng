@@ -1,6 +1,7 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
+import "./styles/tokens.css";
 import "./style.css";
 import { toast } from "./composables/useToast";
 import { humanizeError } from "./lib/humanizeError";

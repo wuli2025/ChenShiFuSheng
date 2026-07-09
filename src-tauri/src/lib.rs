@@ -14,6 +14,10 @@ pub mod engine;
 pub mod kb;
 pub mod provider;
 pub mod skills;
+// 创作工坊(AI人生画布引擎工作台)探活/拉起 —— 大厅「创作工坊」屏依赖。
+pub mod studio;
+// 灵动工坊(VN 动效叙事)——项目CRUD/claude写稿/codex生图/素材/导出,前端 pipeline.ts 编排。
+pub mod vn_studio;
 pub mod voice;
 // 语音识别运行时(本地 SenseVoice via sherpa-rs);默认不编译,保护现有 build。
 #[cfg(feature = "voice-asr")]
@@ -47,8 +51,7 @@ pub fn run() {
                 .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
             provider::init(h)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
-            engine::init(h)
-                .map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
+            engine::init(h).map_err(|e| -> Box<dyn std::error::Error> { e.to_string().into() })?;
             // 环境预热: 后台把 claude / pwsh 目录塞进进程 PATH + 设 Git Bash 路径,
             // 让之后 spawn 的 claude CLI 直接「找得到、有 shell」, 无需重启 (见 doctor.rs)。
             doctor::prime_path_for_claude();
@@ -75,6 +78,8 @@ pub fn run() {
             kb::kb_convert_batch,
             kb::kb_graph,
             kb::kb_lint,
+            kb::kb_scan_sources,
+            kb::kb_quarantine,
             kb::kb_enrich_links,
             kb::kb_dedup,
             // 名人资料包（下载到自己的资料库，附带配套 skill）
@@ -131,6 +136,31 @@ pub fn run() {
             // Agent 引擎切换(codex CLI / claude CLI)
             engine::engine_get,
             engine::engine_set,
+            // 创作工坊(画布引擎工作台)探活/拉起/原生子WebView嵌入
+            studio::studio_status,
+            studio::studio_start,
+            studio::studio_embed,
+            studio::studio_embed_bounds,
+            studio::studio_embed_close,
+            studio::studio_embed_reload,
+            // 灵动工坊(VN 动效叙事)
+            vn_studio::vn_list,
+            vn_studio::vn_create,
+            vn_studio::vn_delete,
+            vn_studio::vn_read_file,
+            vn_studio::vn_write_file,
+            vn_studio::vn_update_meta,
+            vn_studio::vn_list_assets,
+            vn_studio::vn_asset_b64,
+            vn_studio::vn_assets_b64,
+            vn_studio::vn_list_backups,
+            vn_studio::vn_read_backup,
+            vn_studio::vn_restore_backup,
+            vn_studio::vn_export,
+            vn_studio::vn_open_dir,
+            vn_studio::vn_run_claude,
+            vn_studio::vn_codex_shot,
+            vn_studio::vn_probe_auth,
             // 环境医生 (环境监测 + 配置安装)
             doctor::env_check,
             doctor::env_fix_path,

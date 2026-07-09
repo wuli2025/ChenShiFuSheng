@@ -96,7 +96,7 @@ Claude 官方、智谱、DeepSeek、火山方舟、Gemini、聚合站……点�
 
 | 工具 | 用途 |
 |------|------|
-| Node 20+ | 前端构建 (`npm`) |
+| Node 20.19+ / 22.12+ | 前端构建 (`npm`)，与 Vite 8 engine 要求一致 |
 | Rust 1.80+ | Tauri 后端 |
 | Docker Desktop | 沙箱镜像构建 / 运行（可选）|
 | `claude` CLI | 对话核心调用（沙箱内自动装；宿主由「环境医生」一键装，或手动 `npm i -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com`，国内可装）|
@@ -107,15 +107,15 @@ Claude 官方、智谱、DeepSeek、火山方舟、Gemini、聚合站……点�
 # 把 cargo 加进 PATH
 $env:PATH = "C:\Users\mi\.cargo\bin;$env:PATH"
 
-cd D:\polaris\polaris-app
+cd D:\polaris\人生七年\尘世浮生
 npm install          # 首次
 npm run tauri:dev
 ```
 
-Vite 端口固定 1420。若被占用先清端口：
+Vite 端口固定 1431（原版 尘世浮生录 占 1430，本副本改 1431 避冲突）。若被占用先清端口：
 
 ```powershell
-Get-NetTCPConnection -LocalPort 1420 -ErrorAction SilentlyContinue |
+Get-NetTCPConnection -LocalPort 1431 -ErrorAction SilentlyContinue |
   Select-Object -ExpandProperty OwningProcess | ForEach-Object {
     Stop-Process -Id $_ -Force
   }
