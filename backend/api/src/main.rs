@@ -24,6 +24,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let embedded = std::env::args().any(|a| a == "--embedded");
+    // PORT=0 → 让内核挑一个空闲端口。桌面壳这么用：避免固定端口撞车。
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -60,9 +61,19 @@ async fn main() -> anyhow::Result<()> {
         .fallback_service(ServeDir::new(&static_dir).append_index_html_on_directories(true))
         .layer(CorsLayer::permissive());
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    // 桌面（embedded）只监听回环 —— 不该把本机服务暴露到局域网。
+    let bind_ip = if embedded { [127, 0, 0, 1] } else { [0, 0, 0, 0] };
+    let addr = SocketAddr::from((bind_ip, port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("listening on http://127.0.0.1:{port}");
+    let actual = listener.local_addr()?.port();
+
+    // 端口就绪信号：PORT=0 时壳无法预知端口，靠这一行 stdout 拿到。
+    // 格式固定，sidecar 守护按前缀解析，别改。
+    println!("CHENSHI_LISTENING {actual}");
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+
+    tracing::info!("listening on http://127.0.0.1:{actual}");
     axum::serve(listener, app).await?;
     Ok(())
 }

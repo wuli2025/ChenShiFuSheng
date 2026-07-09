@@ -60,6 +60,11 @@ jobs:
         working-directory: frontend
         run: node build.mjs dist/尘世浮生.html
 
+      # 网页端不许携带桌面专属代码（doctor 页 / 目录对话框）
+      - name: 端差断言 · tree-shaking
+        working-directory: frontend
+        run: node test/端差断言.mjs
+
       - name: playwright 浏览器
         working-directory: frontend
         run: npx playwright install --with-deps chromium

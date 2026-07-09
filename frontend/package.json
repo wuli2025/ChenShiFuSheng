@@ -14,7 +14,8 @@
     "test:hall-visible": "node test/hall-visible.mjs",
     "test:hall-layout": "node test/hall-layout.mjs",
     "test:game": "npm run fixture:game && node test/game-smoke.mjs",
-    "test": "npm run test:wcag && npm run test:version && npm run build && npm run test:smoke && npm run test:viewport && npm run test:hall-visible && npm run test:hall-layout && npm run test:game"
+    "test": "npm run test:wcag && npm run test:version && npm run build && npm run test:platform && npm run test:smoke && npm run test:viewport && npm run test:hall-visible && npm run test:hall-layout && npm run test:game",
+    "test:platform": "node test/端差断言.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

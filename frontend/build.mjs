@@ -18,6 +18,21 @@ const out = process.argv[2] || join(here, 'dist', '尘世浮生.html');
 const html = readFileSync(join(here, 'apps/web/index.html'), 'utf8');
 const css = readFileSync(join(here, 'packages/ui-kit/tokens.css'), 'utf8');
 const js = readFileSync(join(here, 'packages/ui-kit/crystal-hall.js'), 'utf8');
+const platform = readFileSync(join(here, 'packages/ui-kit/platform.js'), 'utf8');
+
+// platform.js 用动态 import 拉桌面桥与诊断页。web 包两者都不带：
+// 把这两个入口整体替换成「永远返回 null」，它们的字节一个都不进产物。
+// （断言在 test/端差断言.mjs）
+const platformInlined = platform
+  .replace(/^export /gm, '')
+  .replace(
+    /function bridge\(\) \{[\s\S]*?\n}/m,
+    'function bridge() {\n  // web 构建：桌面桥已被摇掉。\n  return Promise.resolve(null);\n}'
+  )
+  .replace(
+    /async function loadDiagnosticsPage\(\) \{[\s\S]*?\n}/m,
+    'async function loadDiagnosticsPage() {\n  // web 构建：诊断页已被摇掉。\n  return null;\n}'
+  );
 
 let bundled = html
   // 内联 tokens.css
@@ -25,10 +40,14 @@ let bundled = html
     /<link rel="stylesheet" href="[^"]*tokens\.css">/,
     `<style>\n/* ==== ui-kit/tokens.css (inlined) ==== */\n${css}\n</style>`
   )
-  // 把 ESM import 换成内联模块：crystal-hall.js 去掉 export 关键字后直接前置
+  // 把 ESM import 换成内联模块：去掉 export 关键字后直接前置
   .replace(
     /import \{ CrystalHall \} from '[^']*crystal-hall\.js';/,
     `/* ==== ui-kit/crystal-hall.js (inlined) ==== */\n${js.replace(/^export /gm, '')}`
+  )
+  .replace(
+    /import \{ platform, loadDiagnosticsPage \} from '[^']*platform\.js';/,
+    `/* ==== ui-kit/platform.js (inlined; 桌面桥与诊断页已摇掉) ==== */\n${platformInlined}`
   );
 
 // 自包含校验：不能再有 <link rel=stylesheet>、ESM import 语句、或任何 http(s) 外链。

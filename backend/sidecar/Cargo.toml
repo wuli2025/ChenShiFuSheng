@@ -1,0 +1,9 @@
+[package]
+name = "sidecar"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cli-core = { path = "../cli-core" }
+anyhow = { workspace = true }
+tracing = { workspace = true }
