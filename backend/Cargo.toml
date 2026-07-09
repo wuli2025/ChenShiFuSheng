@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cli-core", "provider-dock", "gen-pipeline"]
+members = ["cli-core", "provider-dock", "gen-pipeline", "api", "worker"]
 
 [workspace.package]
 version = "0.11.0"

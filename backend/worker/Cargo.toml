@@ -1,0 +1,21 @@
+[package]
+name = "worker"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "chenshi-worker"
+path = "src/main.rs"
+
+[dependencies]
+cli-core = { path = "../cli-core" }
+provider-dock = { path = "../provider-dock" }
+gen-pipeline = { path = "../gen-pipeline" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"], default-features = false }
