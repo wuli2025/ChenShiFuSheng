@@ -7,7 +7,10 @@ use crate::script::Script;
 use crate::template::Contract;
 
 /// 全局硬底线：不在 contract.checks 里也强制执行。
-pub const GLOBAL_FLOOR: &[&str] = &["playtime_min", "no_placeholder_art"];
+///
+/// 前两条是产品底线（用户明确定的）。`no_dangling_refs` 是结构底线 ——
+/// 选项指向不存在的节点会让玩家卡死，没有任何模板该豁免它。
+pub const GLOBAL_FLOOR: &[&str] = &["playtime_min", "no_placeholder_art", "no_dangling_refs"];
 
 /// 全局最短周目（秒）。这是产品底线，不是模板字段。
 pub const FLOOR_PLAYTIME_SEC: u32 = 600;
@@ -115,6 +118,25 @@ fn run_one(name: &str, s: &Script, c: &Contract, art: &ArtAudit) -> CheckResult 
                 bad(
                     name,
                     format!("发现非真生图来源: {:?}，禁止 SVG/占位图降级", art.offenders()),
+                )
+            }
+        }
+
+        // —— 结构底线：悬空引用让玩家卡死。
+        "no_dangling_refs" => {
+            let d = s.dangling_refs();
+            if d.is_empty() {
+                ok(name, "所有选项都指向存在的节点")
+            } else {
+                let sample: Vec<String> = d
+                    .iter()
+                    .take(5)
+                    .map(|(from, to)| format!("{from} → {to}"))
+                    .collect();
+                bad(
+                    name,
+                    format!("{} 处悬空引用（玩家会卡死）: {}{}", d.len(), sample.join(", "),
+                        if d.len() > 5 { " …" } else { "" }),
                 )
             }
         }

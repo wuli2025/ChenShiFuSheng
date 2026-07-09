@@ -1,0 +1,76 @@
+# 尘世浮生 · 生产编排
+#
+# 拓扑要点（v11 §10）：
+# - 玩家读流量 95% 终结在 nginx 静态直出（/games），不打 API。
+# - api 无状态 ×2，可横扩；worker 与 api 分容器 —— CLI 重任务 OOM 不影响 API 可用性。
+# - **只有 worker 容器含 claude/codex CLI 与生图凭据**；api 容器不含。
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ['80:80']
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - web-dist:/srv/web:ro
+      - chenshi-data:/srv/data:ro       # /games 直出产物仓
+    depends_on: [api]
+    restart: unless-stopped
+
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile.api }
+    environment:
+      CHENSHI_DATA_DIR: /data
+      DATABASE_URL: postgres://chenshi:${PG_PASSWORD}@pg/chenshi
+      REDIS_URL: redis://redis:6379
+      CHENSHI_QUOTA_USER_TOTAL: 4
+      RUST_LOG: info
+    volumes: [chenshi-data:/data]
+    depends_on: [pg, redis]
+    deploy: { replicas: 2 }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/v1/health']
+      interval: 20s
+      timeout: 4s
+      retries: 3
+    restart: unless-stopped
+
+  worker:
+    build: { context: .., dockerfile: deploy/Dockerfile.worker }
+    environment:
+      CHENSHI_DATA_DIR: /data
+      DATABASE_URL: postgres://chenshi:${PG_PASSWORD}@pg/chenshi
+      REDIS_URL: redis://redis:6379
+      # 生图梯队二。留空则梯队一失败时该张直接红（绝不落 SVG）。
+      IMAGE_API_BASE_URL: ${IMAGE_API_BASE_URL:-}
+      IMAGE_API_KEY: ${IMAGE_API_KEY:-}
+      IMAGE_API_MODEL: ${IMAGE_API_MODEL:-}
+      RUST_LOG: info
+    volumes: [chenshi-data:/data]
+    depends_on: [pg, redis]
+    deploy: { replicas: 2 }        # 按队列深度伸缩；峰值 ~40 并发 CLI 槽 ≈ 5-10 副本
+    restart: unless-stopped
+
+  pg:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chenshi
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: chenshi
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./backup:/backup                 # 每日备份 + 每周恢复演练脚本落这里
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U chenshi']
+      interval: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis-data:/data]
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  redis-data:
+  chenshi-data:
+  web-dist:

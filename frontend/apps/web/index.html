@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="deep-space">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>尘世浮生 · 一生皆可演绎</title>
+<link rel="stylesheet" href="../../packages/ui-kit/tokens.css">
+<style>
+/* ==========================================================================
+   应用外壳。所有色值/间距来自 tokens.css，此处只做布局。
+   ========================================================================== */
+html, body { height: 100%; }
+body { overflow: hidden; }
+
+#app { height: 100vh; display: flex; flex-direction: column; }
+
+/* —— 顶栏：字标 + 导航 —— */
+header.topbar {
+  height: 56px; flex: none;
+  display: flex; align-items: center; gap: var(--sp-5);
+  padding: 0 var(--sp-5);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-1) 88%, transparent);
+  backdrop-filter: blur(12px);
+  z-index: var(--z-sticky);
+}
+.wordmark { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-lg); font-weight: 600; letter-spacing: 2px; }
+.wordmark .mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #a9c8ff, #4b6fd8 55%, #1b2545);
+  box-shadow: 0 0 12px var(--glow);
+}
+/* 顶栏在窄屏可横向滚动自身，页面 body 永不横向滚动 */
+nav.tabs { display: flex; gap: 2px; margin-left: var(--sp-4); overflow-x: auto; scrollbar-width: none; }
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs button {
+  height: 34px; padding: 0 var(--sp-4); border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--tx-2); font: inherit; font-size: var(--fs-sm); cursor: pointer;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+nav.tabs button:hover { color: var(--tx-1); background: var(--bg-2); }
+nav.tabs button[aria-current='page'] { color: var(--tx-1); background: var(--bg-2); font-weight: 600; }
+.spacer { flex: 1; }
+
+main { flex: 1; position: relative; overflow: hidden; }
+.view { position: absolute; inset: 0; overflow-y: auto; opacity: 0; pointer-events: none;
+        transition: opacity var(--t-base) var(--ease); }
+.view[data-active] { opacity: 1; pointer-events: auto; }
+.pad { padding: var(--sp-6) var(--sp-7); max-width: 1180px; margin: 0 auto; }
+
+h1.title { font-size: var(--fs-3xl); line-height: var(--lh-3xl); margin-bottom: var(--sp-2); }
+p.lede { color: var(--tx-2); font-size: var(--fs-sm); margin-bottom: var(--sp-6); }
+h3.sec { font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3); }
+
+/* ==================== 大厅 ==================== */
+#hall { display: flex; flex-direction: column; }
+.hall-stage { flex: 1; position: relative; min-height: 0; }
+.hall-stage canvas { width: 100%; height: 100%; display: block; }
+/* 星域背景：静态渐变 + 极稀疏星点，不用粒子系统（省帧） */
+.hall-stage::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(80,110,200,.16), transparent 70%),
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,.5) .6px, transparent .6px),
+    radial-gradient(circle at 72% 68%, rgba(255,255,255,.4) .6px, transparent .6px),
+    radial-gradient(circle at 88% 18%, rgba(255,255,255,.35) .5px, transparent .5px),
+    radial-gradient(circle at 32% 78%, rgba(255,255,255,.3) .5px, transparent .5px),
+    var(--bg-0);
+}
+.hall-head { padding: var(--sp-6) var(--sp-7) 0; text-align: center; }
+.hall-head h1 { font-size: 28px; letter-spacing: 4px; font-weight: 300; }
+.hall-head h1 b { font-weight: 600; background: linear-gradient(90deg, var(--acc), var(--acc-2));
+                  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hall-filters { display: flex; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-4); flex-wrap: wrap; }
+.chip {
+  height: 30px; padding: 0 var(--sp-4); border-radius: var(--r-full);
+  border: 1px solid var(--line); background: transparent; color: var(--tx-2);
+  font: inherit; font-size: var(--fs-xs); cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.chip:hover { color: var(--tx-1); border-color: var(--line-strong); }
+.chip[aria-pressed='true'] { background: var(--bg-2); color: var(--tx-1); border-color: var(--acc); }
+
+/* 悬停卡：跟随球体，只用 transform 定位 */
+#orbCard {
+  position: fixed; z-index: var(--z-card); pointer-events: none;
+  min-width: 208px; padding: var(--sp-3) var(--sp-4);
+  background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--sh-3); backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(6px);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  will-change: transform, opacity;
+}
+#orbCard[data-show] { opacity: 1; transform: translateY(0); }
+#orbCard .t { font-size: var(--fs-md); font-weight: 600; margin-bottom: 2px; }
+#orbCard .m { font-size: var(--fs-xs); color: var(--tx-2); display: flex; gap: var(--sp-3); font-variant-numeric: var(--num); }
+#orbCard .a { font-size: var(--fs-xs); color: var(--tx-3); margin-top: var(--sp-2); }
+
+/* ==================== 模板库 ==================== */
+.tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: var(--sp-4); }
+.tpl {
+  cursor: pointer; overflow: hidden; padding: 0;
+  display: flex; flex-direction: column;
+}
+.tpl .cover { height: 108px; position: relative; }
+.tpl .cover::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, var(--bg-1), transparent 60%);
+}
+.tpl .body { padding: var(--sp-4); }
+.tpl h4 { font-size: var(--fs-md); margin-bottom: var(--sp-1); }
+.tpl .meta { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-3); }
+.tpl .desc { font-size: var(--fs-xs); color: var(--tx-2); margin-top: var(--sp-2); min-height: 34px; }
+
+/* 思路页抽屉 */
+#drawer {
+  position: fixed; inset: 0 0 0 auto; width: min(680px, 100%); z-index: var(--z-drawer);
+  background: var(--bg-1); border-left: 1px solid var(--line); box-shadow: var(--sh-4);
+  transform: translateX(100%); transition: transform var(--t-slow) var(--ease);
+  overflow-y: auto; will-change: transform;
+}
+#drawer[data-open] { transform: translateX(0); }
+#drawer .dh { position: sticky; top: 0; background: inherit; padding: var(--sp-5);
+              border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: var(--sp-3); }
+#drawer .db { padding: var(--sp-5); }
+.rationale h5 { font-size: var(--fs-md); color: var(--acc); margin: var(--sp-5) 0 var(--sp-2); }
+.rationale p { font-size: var(--fs-sm); color: var(--tx-2); margin-bottom: var(--sp-2); }
+.kv { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin-top: var(--sp-3); }
+.kv td { border-bottom: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); }
+.kv td:first-child { color: var(--tx-2); width: 34%; }
+.kv td:last-child { font-variant-numeric: var(--num); }
+
+/* ==================== 工作流台 ==================== */
+/* 宽内容在自己的容器里横向滚动，页面 body 绝不横向滚动 */
+.pipe { display: flex; align-items: stretch; gap: var(--sp-2); margin: var(--sp-5) 0;
+        overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--sp-1); }
+.stage {
+  flex: 1 0 116px; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--bg-1);
+  transition: border-color var(--t-base) var(--ease), background var(--t-base) var(--ease);
+}
+.stage .n { font-size: var(--fs-xs); color: var(--tx-3); font-variant-numeric: var(--num); }
+.stage .t { font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+.stage[data-state='running'] { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 8%, var(--bg-1)); }
+.stage[data-state='done'] { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.stage[data-state='failed'] { border-color: var(--bad); }
+
+.timeline { font-family: var(--font-mono); font-size: var(--fs-xs); }
+.ev { display: flex; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line);
+      min-width: 0; flex-wrap: wrap; }
+.ev .id { color: var(--tx-3); min-width: 34px; text-align: right; flex: none; }
+.ev .k { min-width: 132px; flex: none; }
+.ev .p { flex: 1; min-width: 0; }
+.ev .p { color: var(--tx-2); word-break: break-all; }
+.ev-ok .k { color: var(--ok); } .ev-run .k { color: var(--acc); }
+.ev-bad .k { color: var(--bad); } .ev-warn .k { color: var(--warn); }
+
+/* ==================== Player ==================== */
+#player {
+  position: fixed; inset: 0; z-index: var(--z-player); background: #000;
+  display: none; flex-direction: column;
+}
+#player[data-open] { display: flex; }
+#player iframe { flex: 1; border: 0; width: 100%; }
+#player .close {
+  position: absolute; right: var(--sp-4); top: var(--sp-4); z-index: 1;
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
+  background: rgba(0,0,0,.5); color: #fff; cursor: pointer; backdrop-filter: blur(6px);
+}
+
+/* ==================== 杂项 ==================== */
+.row { display: flex; gap: var(--sp-3); align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .pad { padding: var(--sp-5) var(--sp-4); } }
+.muted { color: var(--tx-2); font-size: var(--fs-sm); }
+.mono-sm { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--tx-3); }
+.hr { height: 1px; background: var(--line); margin: var(--sp-5) 0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="wordmark"><span class="mark" aria-hidden="true"></span>尘世浮生</div>
+    <nav class="tabs" role="tablist">
+      <button data-tab="hall" aria-current="page">大厅</button>
+      <button data-tab="templates">模板库</button>
+      <button data-tab="studio">创作台</button>
+      <button data-tab="settings">设置</button>
+    </nav>
+    <div class="spacer"></div>
+    <span id="apiState" class="mono-sm">● 离线演示</span>
+    <button class="btn btn-ghost" id="themeBtn" title="切换主题">◐</button>
+  </header>
+
+  <main>
+    <!-- ============ 大厅 ============ -->
+    <section class="view" id="hall" data-active>
+      <div class="hall-head">
+        <h1>一生皆可<b>演绎</b></h1>
+        <div class="hall-filters" role="group" aria-label="分区">
+          <button class="chip" aria-pressed="true" data-sec="featured">精选</button>
+          <button class="chip" aria-pressed="false" data-sec="new">最新</button>
+          <button class="chip" aria-pressed="false" data-sec="hot">热榜</button>
+          <button class="chip" aria-pressed="false" data-sec="played">我玩过</button>
+        </div>
+      </div>
+      <div class="hall-stage"><canvas id="hallCanvas" aria-label="水晶球大厅"></canvas></div>
+    </section>
+
+    <!-- ============ 模板库 ============ -->
+    <section class="view" id="templates">
+      <div class="pad">
+        <h1 class="title">模板库</h1>
+        <p class="lede">规则是数据，不是代码。每个模板自带生成契约与思路卡 —— 点开看它为什么这么定，一键做同款。</p>
+        <div class="tpl-grid" id="tplGrid"></div>
+      </div>
+    </section>
+
+    <!-- ============ 创作台 ============ -->
+    <section class="view" id="studio">
+      <div class="pad">
+        <h1 class="title">创作台</h1>
+        <p class="lede">立项后直接开始执行 —— 不问路径，不弹确认。关掉页面任务照跑，回来时间线自动补齐。</p>
+
+        <div class="card">
+          <div class="row">
+            <input class="input" id="topicInput" placeholder="一句话题材，例如：兽医人生" style="flex:1">
+            <select class="input" id="tplSelect" style="width:220px"></select>
+            <button class="btn btn-primary" id="forgeBtn">开始生成</button>
+          </div>
+          <div class="pipe" id="pipe">
+            <div class="stage" data-stage="S1"><div class="n">S1</div><div class="t">立项</div></div>
+            <div class="stage" data-stage="S2"><div class="n">S2</div><div class="t">写剧本</div></div>
+            <div class="stage" data-stage="S3"><div class="n">S3</div><div class="t">图谱定稿</div></div>
+            <div class="stage" data-stage="S4"><div class="n">S4</div><div class="t">生产素材</div></div>
+            <div class="stage" data-stage="S5"><div class="n">S5</div><div class="t">编译发布</div></div>
+          </div>
+        </div>
+
+        <h3 class="sec">持久时间线 <span class="muted">先写库，再广播；SSE 只是显示器</span></h3>
+        <div class="card"><div class="timeline" id="timeline">
+          <div class="empty"><h4>还没有事件</h4><p class="muted">提交一个任务，这里会实时流动。</p></div>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- ============ 设置 ============ -->
+    <section class="view" id="settings">
+      <div class="pad">
+        <h1 class="title">设置</h1>
+        <p class="lede">API 供应商坞是隔离板块：其余页面不出现任何厂商概念，业务层只拿到不透明的环境补丁。</p>
+        <div class="grid2">
+          <div class="card">
+            <h3 class="sec" style="margin-top:0">API 供应商坞</h3>
+            <p class="muted">55 个内置预设。密钥加密落库，前端只见掩码。</p>
+            <select class="input" id="providerSelect" style="margin-top:var(--sp-3)"></select>
+            <input class="input" type="password" placeholder="API Key（掩码显示）" style="margin-top:var(--sp-3)">
+            <div class="hr"></div>
+            <h3 class="sec" style="margin-top:0">生图双梯队</h3>
+            <table class="kv">
+              <tr><td>梯队一</td><td>codex CLI <span class="tag tag-ok">优先</span></td></tr>
+              <tr><td>梯队二</td><td>生图模型 API <span class="tag tag-warn">自动降级</span></td></tr>
+              <tr><td>降级标记</td><td><span class="badge badge-fallback">FB</span> 单张粒度，可一键重生</td></tr>
+              <tr><td>SVG / 占位图</td><td><span class="tag tag-bad">永久禁止</span></td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h3 class="sec" style="margin-top:0">端差矩阵</h3>
+            <table class="kv">
+              <tr><td>目标文件夹</td><td>网页端<span class="tag tag-bad">无</span> 桌面端<span class="tag tag-ok">有</span></td></tr>
+              <tr><td>环境医生</td><td>网页端<span class="tag tag-bad">无</span> 桌面端<span class="tag tag-ok">有</span></td></tr>
+              <tr><td>数据目录</td><td class="mono-sm">D:\chenshi-data</td></tr>
+              <tr><td>执行策略</td><td>两端一致：直接开始执行</td></tr>
+              <tr><td>后端</td><td>同一个二进制（<code>--embedded</code> 切桌面）</td></tr>
+            </table>
+            <div class="hr"></div>
+            <h3 class="sec" style="margin-top:0">全局硬底线</h3>
+            <p class="muted">① 单周目 ≥10 分钟　② 插画必须真生图模型</p>
+            <p class="muted">其余一切规则（节点数 / 结局数 / 门槛哲学）随模板走。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 悬停卡 -->
+<div id="orbCard" role="tooltip">
+  <div class="t"></div>
+  <div class="m"><span class="e"></span><span class="d"></span><span class="p"></span></div>
+  <div class="a"></div>
+</div>
+
+<!-- 模板思路抽屉 -->
+<aside id="drawer" aria-hidden="true">
+  <div class="dh">
+    <button class="btn btn-ghost" id="drawerClose" aria-label="关闭">←</button>
+    <strong id="drawerTitle"></strong>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" id="cloneBtn">做同款</button>
+  </div>
+  <div class="db" id="drawerBody"></div>
+</aside>
+
+<!-- 全屏播放器 -->
+<div id="player">
+  <button class="close" id="playerClose" aria-label="退出">✕</button>
+  <iframe id="playerFrame" sandbox="allow-scripts allow-same-origin" title="游戏"></iframe>
+</div>
+
+<script type="module">
+import { CrystalHall } from '../../packages/ui-kit/crystal-hall.js';
+
+// ============================================================================
+// platform 适配层 —— 全代码库唯一允许感知端别的地方
+// ============================================================================
+const platform = {
+  apiBase: location.protocol === 'file:' ? null : '/v1',
+  get isDesktop() { return !!window.__TAURI__; },
+  get hasLocalFs() { return this.isDesktop; },   // 网页端无目标文件夹
+  get hasDoctor()  { return this.isDesktop; },   // 网页端无环境医生
+};
+
+async function api(path, opts) {
+  if (!platform.apiBase) throw new Error('offline');
+  const r = await fetch(platform.apiBase + path, {
+    headers: { 'content-type': 'application/json' }, ...opts,
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ============================================================================
+// 离线演示数据（file:// 双击打开时用；接上后端后自动换成真数据）
+// ============================================================================
+const DEMO_TEMPLATES = [
+  { id:'life-seven-classic', name:'人生七年·经典款', hue:210,
+    scale:{nodes_min:160, endings_min:29, playtime_min_sec:600},
+    numeric:{attrs:['体魄','学识','技术','魅力','存款'], soft_cap:true, growth_curve:'diminishing'},
+    gates:{style:'attr_threshold', narrative_consistency:true, transition:'fullscreen_text'},
+    endings:{style:'persona_report', reachability_proof:true},
+    art:{style_prompt:'水彩纪实风，柔和光影，中国当代都市与乡镇场景', fallback:'auto'},
+    checks:['playtime_min','nodes_min','endings_min','endings_reachable_all','true_branching','numeric_within_softcap','gate_narrative_consistency'],
+    源作:'含图版 v11', desc:'GATE 四路线、隐藏线与重掷、软上限防爆表。系列的定盘星。' },
+  { id:'epic-scroll', name:'史诗长卷款', hue:276,
+    scale:{nodes_min:315, endings_min:43, playtime_min_sec:900},
+    numeric:{attrs:['体魄','学识','技术','魅力','存款','声望'], soft_cap:true, growth_curve:'diminishing'},
+    gates:{style:'attr_threshold', narrative_consistency:true, transition:'fullscreen_text'},
+    endings:{style:'persona_report', reachability_proof:true},
+    art:{style_prompt:'厚涂油画风，宏大叙事，跨越数十年的时代变迁', fallback:'auto'},
+    checks:['playtime_min','nodes_min','endings_min','endings_reachable_all','true_branching','numeric_within_softcap'],
+    源作:'模拟器 v3', desc:'315 节点 43 结局，真分叉优先，一周目 15 分钟起。' },
+  { id:'industry-immersive', name:'行业沉浸款', hue:32,
+    scale:{nodes_min:83, endings_min:35, playtime_min_sec:900},
+    numeric:{attrs:['专业','人脉','风控','体魄','资本'], soft_cap:true, growth_curve:'diminishing'},
+    gates:{style:'attr_threshold', narrative_consistency:true, transition:'fullscreen_text'},
+    endings:{style:'persona_report', reachability_proof:true},
+    art:{style_prompt:'写实插画风，专业场景，器物细节考究', fallback:'auto'},
+    checks:['playtime_min','endings_min','endings_reachable_all','true_branching','glossary_present'],
+    源作:'金融工程 v1', desc:'名词解释图谱必配。节点少而重，每一拍都有行业密度。' },
+  { id:'fast-career', name:'快节奏职业款', hue:150,
+    scale:{nodes_min:120, endings_min:32, playtime_min_sec:600},
+    numeric:{attrs:['专业','人脉','口碑','存款'], soft_cap:true, growth_curve:'diminishing'},
+    gates:{style:'attr_threshold', narrative_consistency:true, transition:'fullscreen_text'},
+    endings:{style:'persona_report', reachability_proof:true},
+    art:{style_prompt:'清爽扁平插画，职场与城市生活', fallback:'auto'},
+    checks:['playtime_min','nodes_min','endings_min','endings_reachable_all','true_branching'],
+    源作:'网媒 / 会计 / 法学 v1', desc:'结局按职业阶梯分布，10–12 分钟一周目。' },
+  { id:'genius-narrative', name:'天才叙事款', hue:196,
+    scale:{nodes_min:110, endings_min:32, playtime_min_sec:600},
+    numeric:{attrs:['天赋','专注','孤独'], soft_cap:true, growth_curve:'diminishing'},
+    gates:{style:'mixed', narrative_consistency:true, transition:'fade'},
+    endings:{style:'persona_report', reachability_proof:true},
+    art:{style_prompt:'冷色调概念插画，抽象与理性之美', fallback:'auto'},
+    checks:['playtime_min','endings_min','endings_reachable_all','hidden_line_density'],
+    源作:'数学天才 v1', desc:'属性少、事件驱动，隐藏线密度高 —— 少即是多。' },
+];
+
+const RATIONALE = {
+  'life-seven-classic': [
+    ['为什么启用软上限', '早期版本属性可以无限堆叠，玩到中段数值爆表，后半程所有检定都必过，叙事张力归零。v5 引入软上限：属性越接近上限，单次收益越小。'],
+    ['为什么门槛必须叙事自洽', 'v9 之前，学术路线的 GATE 也检查存款，玩家困惑「读博为什么要看我有多少钱」。现在门槛按叙事反推：学术线看学识与专注，创业线才看资金与技术。'],
+    ['为什么结局从画像反推', '先写「这个人最终成了什么样的人」的成绩单，再倒推需要哪些属性组合与关键选择。这样每个结局都有质感，而不是数值区间的机械切分。'],
+    ['为什么要隐藏线与重掷', '一周目必然错过大量内容。隐藏线给二周目理由；重掷次数随已解锁结局增长，把探索行为本身变成正反馈。'],
+  ],
+  'epic-scroll': [
+    ['为什么 315 节点', '要写「一生」而不是「一段」，时代变迁需要足够的节拍。节点少了，跨度感就假。'],
+    ['为什么真分叉优先', '长剧本最容易偷懒的地方就是换皮分叉 —— 三个选项跳同一个节点。校验器会机器检出并打回。'],
+  ],
+  'industry-immersive': [
+    ['为什么节点可以少', '行业题材靠密度不靠长度。83 个节点里每一拍都得有真实的行业细节，撑得起 15 分钟。'],
+    ['为什么强制名词图谱', '外行玩家看不懂「久期」「对赌」就出戏。glossary_present 是这个模板独有的一票否决项。'],
+  ],
+  'fast-career': [
+    ['为什么结局按职业阶梯分布', '职业题材的爽点是「我走到了哪一层」。结局密集分布在阶梯的每一级，而不是集中在顶端。'],
+  ],
+  'genius-narrative': [
+    ['为什么只有三个属性', '天赋、专注、孤独 —— 天才叙事的张力全在这三者的互相消耗。属性多了反而稀释。'],
+    ['为什么隐藏线密度要 ≥8%', '天才的故事需要「原来还有这条路」的震颤。hidden_line_density 是这个模板独有的检查。'],
+  ],
+};
+
+const DEMO_GAMES = [
+  { id:'g1', title:'AI 人生模拟器 · 一生', author:'尘世浮生', endings:46, playtime:15, plays:12840, progress:.62, hue:212, featured:true },
+  { id:'g2', title:'创业人生 · 星辰与深渊', author:'founder-sim', endings:35, playtime:15, plays:8210, progress:1, hue:276 },
+  { id:'g3', title:'造物者 · 一生', author:'造物者', endings:38, playtime:14, plays:6402, progress:.31, hue:32 },
+  { id:'g4', title:'金融工程人生', author:'尘世浮生', endings:35, playtime:15, plays:5130, progress:0, hue:150 },
+  { id:'g5', title:'法学人生', author:'尘世浮生', endings:29, playtime:12, plays:4021, progress:0, hue:340 },
+  { id:'g6', title:'网络与新媒体人生', author:'尘世浮生', endings:32, playtime:11, plays:3388, progress:.12, hue:196 },
+  { id:'g7', title:'会计人生', author:'尘世浮生', endings:34, playtime:11, plays:2914, progress:0, hue:96 },
+  { id:'g8', title:'数学天才人生', author:'尘世浮生', endings:32, playtime:12, plays:2600, progress:.75, hue:258 },
+  { id:'g9', title:'兽医人生', author:'demo', endings:30, playtime:10, plays:1180, progress:0, hue:14 },
+  { id:'g10', title:'灵动引擎演示', author:'engine', endings:1, playtime:10, plays:980, progress:0, hue:180 },
+];
+
+// ============================================================================
+// 路由
+// ============================================================================
+const views = [...document.querySelectorAll('.view')];
+const tabs = [...document.querySelectorAll('nav.tabs button')];
+function go(name) {
+  views.forEach(v => v.toggleAttribute('data-active', v.id === name));
+  tabs.forEach(b => b.setAttribute('aria-current', b.dataset.tab === name ? 'page' : 'false'));
+  // 大厅只在可见时跑 rAF
+  name === 'hall' ? hall?.start() : hall?.stop();
+}
+tabs.forEach(b => b.onclick = () => go(b.dataset.tab));
+
+// 创作侧用奶油琉璃，玩家侧用深空琉璃 —— 同一套 token，只换色板
+document.getElementById('themeBtn').onclick = () => {
+  const r = document.documentElement;
+  r.dataset.theme = r.dataset.theme === 'deep-space' ? 'cream-glass' : 'deep-space';
+};
+
+// ============================================================================
+// 大厅
+// ============================================================================
+const orbCard = document.getElementById('orbCard');
+let hall;
+
+function mountHall(items) {
+  hall = new CrystalHall(document.getElementById('hallCanvas'), {
+    onHover(item, rect) {
+      if (!item) { orbCard.removeAttribute('data-show'); return; }
+      orbCard.querySelector('.t').textContent = item.title;
+      orbCard.querySelector('.e').textContent = `${item.endings} 结局`;
+      orbCard.querySelector('.d').textContent = `${item.playtime} 分钟`;
+      orbCard.querySelector('.p').textContent = `${item.plays.toLocaleString()} 人玩过`;
+      orbCard.querySelector('.a').textContent =
+        item.progress >= 1 ? '✦ 已解锁全部结局' :
+        item.progress > 0 ? `进度 ${Math.round(item.progress * 100)}% · 可续玩` : `by ${item.author}`;
+      // 只用 transform 定位，不动 layout
+      const x = Math.min(rect.left + rect.width + 14, innerWidth - 240);
+      orbCard.style.left = x + 'px';
+      orbCard.style.top = Math.max(70, rect.top) + 'px';
+      orbCard.setAttribute('data-show', '');
+    },
+    async onEnter(item, rect) {
+      orbCard.removeAttribute('data-show');
+      // 招牌时刻：球膨胀铺满 → Player 接管
+      const el = await CrystalHall.expand(rect, document.body);
+      openPlayer(item, () => CrystalHall.collapse(el, rect));
+    },
+    onDegrade(msg) { toast(msg); },
+  });
+  hall.setItems(items);
+  hall.start();
+}
+
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', 'false'));
+  c.setAttribute('aria-pressed', 'true');
+  const sec = c.dataset.sec;
+  let items = DEMO_GAMES;
+  if (sec === 'featured') items = DEMO_GAMES.filter(g => g.featured || g.plays > 4000);
+  if (sec === 'new') items = [...DEMO_GAMES].reverse();
+  if (sec === 'hot') items = [...DEMO_GAMES].sort((a, b) => b.plays - a.plays);
+  if (sec === 'played') items = DEMO_GAMES.filter(g => g.progress > 0);
+  hall.setItems(items);
+});
+
+// ============================================================================
+// Player Shell —— 大厅玩、编辑器试玩、导出文件双击，跑的是同一份产物
+// ============================================================================
+const player = document.getElementById('player');
+const frame = document.getElementById('playerFrame');
+let onPlayerClose = null;
+
+function openPlayer(item, closeFx) {
+  onPlayerClose = closeFx;
+  frame.srcdoc = demoGameHtml(item);
+  player.setAttribute('data-open', '');
+  document.documentElement.requestFullscreen?.().catch(() => {});
+}
+function closePlayer() {
+  player.removeAttribute('data-open');
+  frame.srcdoc = '';
+  document.exitFullscreen?.().catch(() => {});
+  onPlayerClose?.();     // 球缩回原位（镜头记忆）
+  onPlayerClose = null;
+}
+document.getElementById('playerClose').onclick = closePlayer;
+addEventListener('keydown', e => { if (e.key === 'Escape' && player.hasAttribute('data-open')) closePlayer(); });
+
+/** 内嵌的可玩样例：证明 Player Shell 与导出单文件逐帧一致。 */
+function demoGameHtml(item) {
+  return `<!doctype html><meta charset="utf-8"><style>
+    html,body{height:100%;margin:0;background:#080b13;color:#e8eefb;
+      font:16px/1.9 'PingFang SC','Microsoft YaHei',sans-serif;display:grid;place-items:center}
+    .g{max-width:640px;padding:40px;text-align:center}
+    h1{font-size:26px;font-weight:300;letter-spacing:3px;margin-bottom:8px}
+    .orb{width:120px;height:120px;border-radius:50%;margin:0 auto 28px;
+      background:radial-gradient(circle at 34% 30%, hsl(${item.hue},70%,74%), hsl(${item.hue},60%,38%) 55%, #141a2e);
+      box-shadow:0 0 60px hsla(${item.hue},70%,60%,.3);animation:b 4s ease-in-out infinite}
+    @keyframes b{50%{transform:translateY(-8px)}}
+    p{color:#93a5c4;font-size:14px}
+    .stats{display:flex;gap:24px;justify-content:center;margin-top:24px;font-variant-numeric:tabular-nums}
+    .stats div{font-size:13px;color:#5d6c88}
+    .stats b{display:block;font-size:20px;color:#6ea8ff;font-weight:600}
+    .tip{margin-top:32px;font-size:12px;color:#3f4a60}
+  </style><div class="g">
+    <div class="orb"></div>
+    <h1>${item.title}</h1>
+    <p>Player Shell 已接管全屏。这里加载的是编译产出的单文件 HTML —— 与你双击打开导出文件时逐帧一致。</p>
+    <div class="stats">
+      <div><b>${item.endings}</b>结局</div>
+      <div><b>${item.playtime}</b>分钟/周目</div>
+      <div><b>${item.plays.toLocaleString()}</b>人玩过</div>
+    </div>
+    <div class="tip">按 Esc 退出 · 水晶球会缩回原位</div>
+  </div>`;
+}
+
+// ============================================================================
+// 模板库
+// ============================================================================
+const tplGrid = document.getElementById('tplGrid');
+const drawer = document.getElementById('drawer');
+
+function renderTemplates(list) {
+  tplGrid.innerHTML = '';
+  for (const t of list) {
+    const el = document.createElement('article');
+    el.className = 'card card-hover tpl';
+    el.tabIndex = 0;
+    el.innerHTML = `
+      <div class="cover" style="background:
+        radial-gradient(ellipse 80% 120% at 30% 0%, hsla(${t.hue},60%,55%,.55), transparent 70%),
+        linear-gradient(160deg, hsla(${t.hue},50%,30%,.5), hsla(${t.hue + 40},45%,18%,.6))"></div>
+      <div class="body">
+        <h4>${t.name}</h4>
+        <div class="mono-sm">${t.id}</div>
+        <div class="desc">${t.desc || ''}</div>
+        <div class="meta">
+          <span class="tag">节点 ≥${t.scale.nodes_min}</span>
+          <span class="tag">结局 ≥${t.scale.endings_min}</span>
+          <span class="tag">${t.scale.playtime_min_sec / 60} 分钟</span>
+          <span class="tag tag-ok">${t.checks.length} 条校验</span>
+        </div>
+      </div>`;
+    const open = () => openDrawer(t);
+    el.onclick = open;
+    el.onkeydown = e => { if (e.key === 'Enter') open(); };
+    tplGrid.appendChild(el);
+  }
+}
+
+function openDrawer(t) {
+  document.getElementById('drawerTitle').textContent = t.name;
+  const why = (RATIONALE[t.id] || []).map(([h, p]) => `<h5>${h}</h5><p>${p}</p>`).join('');
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="rationale">
+      <p class="muted">源作：${t.源作 || '—'}　·　这不是一份模板参数表，是九部作品迭代出来的经验。</p>
+      ${why}
+      <h5>生成契约</h5>
+      <table class="kv">
+        <tr><td>节点下限</td><td>${t.scale.nodes_min}</td></tr>
+        <tr><td>结局下限</td><td>${t.scale.endings_min}</td></tr>
+        <tr><td>单周目时长</td><td>≥ ${t.scale.playtime_min_sec / 60} 分钟</td></tr>
+        <tr><td>属性维度</td><td>${t.numeric.attrs.join('、')}</td></tr>
+        <tr><td>数值曲线</td><td>${t.numeric.growth_curve}${t.numeric.soft_cap ? ' · 软上限' : ''}</td></tr>
+        <tr><td>门槛风格</td><td>${t.gates.style}${t.gates.narrative_consistency ? ' · 叙事自洽' : ''}</td></tr>
+        <tr><td>结局风格</td><td>${t.endings.style}</td></tr>
+        <tr><td>插画风格</td><td>${t.art.style_prompt}</td></tr>
+        <tr><td>降级策略</td><td>${t.art.fallback}（codex → 生图 API）</td></tr>
+      </table>
+      <h5>一票否决项（本模板独有）</h5>
+      <div class="meta">${t.checks.map(c => `<span class="tag">${c}</span>`).join(' ')}</div>
+      <p class="muted" style="margin-top:var(--sp-4)">全局硬底线另有两条，任何模板不得豁免：单周目 ≥10 分钟、插画必须真生图模型。</p>
+    </div>`;
+  drawer.setAttribute('data-open', '');
+  drawer.setAttribute('aria-hidden', 'false');
+  document.getElementById('cloneBtn').onclick = () => {
+    closeDrawer();
+    go('studio');
+    document.getElementById('tplSelect').value = t.id;
+    document.getElementById('topicInput').focus();
+    toast(`已选用「${t.name}」—— 填一句话题材即可开始`);
+  };
+}
+function closeDrawer() {
+  drawer.removeAttribute('data-open');
+  drawer.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('drawerClose').onclick = closeDrawer;
+
+// ============================================================================
+// 创作台
+// ============================================================================
+const timelineEl = document.getElementById('timeline');
+let evId = 0;
+
+function pushEvent(kind, payload, cls = '') {
+  if (evId === 0) timelineEl.innerHTML = '';
+  evId++;
+  const row = document.createElement('div');
+  row.className = `ev ${cls}`;
+  row.innerHTML = `<span class="id">#${evId}</span><span class="k">${kind}</span>
+                   <span class="p">${typeof payload === 'string' ? payload : JSON.stringify(payload)}</span>`;
+  timelineEl.appendChild(row);
+  timelineEl.parentElement.scrollTop = 1e9;
+}
+
+function setStage(id, state) {
+  document.querySelector(`.stage[data-stage="${id}"]`)?.setAttribute('data-state', state);
+}
+
+document.getElementById('forgeBtn').onclick = async () => {
+  const topic = document.getElementById('topicInput').value.trim();
+  const tplId = document.getElementById('tplSelect').value;
+  if (!topic) return toast('先填一句话题材');
+  const tpl = DEMO_TEMPLATES.find(t => t.id === tplId);
+
+  document.querySelectorAll('.stage').forEach(s => s.removeAttribute('data-state'));
+  timelineEl.innerHTML = ''; evId = 0;
+
+  if (platform.apiBase) {
+    try {
+      const r = await api('/projects', { method: 'POST', body: JSON.stringify({ topic, template_id: tplId }) });
+      pushEvent('project.created', { project_id: r.project_id }, 'ev-ok');
+      subscribeSSE(r.project_id);
+      return;
+    } catch { /* 落到离线演示 */ }
+  }
+  simulate(topic, tpl);
+};
+
+/** 离线演示：按真实事件序列复演一次流水线（含生图降级与校验）。 */
+async function simulate(topic, tpl) {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  setStage('S1', 'running'); await wait(340);
+  pushEvent('project.created', { title: topic, template: tpl.id }, 'ev-ok');
+  setStage('S1', 'done');
+
+  setStage('S2', 'running');
+  pushEvent('task.queued', { kind: 'script' });
+  await wait(420);
+  pushEvent('task.running', { kind: 'script', engine: 'claude' }, 'ev-run');
+  await wait(700);
+  pushEvent('task.done', { nodes: tpl.scale.nodes_min + 7, endings: tpl.scale.endings_min + 2 }, 'ev-ok');
+  setStage('S2', 'done');
+
+  setStage('S3', 'running'); await wait(360);
+  pushEvent('graph.settled', { 换皮分叉: 0, 不可达结局: 0 }, 'ev-ok');
+  setStage('S3', 'done');
+
+  setStage('S4', 'running');
+  pushEvent('task.running', { kind: 'image', concurrency: 2, lanes: ['lane-w1', 'lane-w2'] }, 'ev-run');
+  await wait(500);
+  pushEvent('image.done', { node_id: 'n003', source: 'codex', attempts: 1 }, 'ev-ok');
+  await wait(300);
+  pushEvent('image.done', { node_id: 'n004', source: 'codex', attempts: 1 }, 'ev-ok');
+  await wait(320);
+  pushEvent('image.done', { node_id: 'n005', source: 'api_fallback', attempts: 4, 说明: 'codex 三次失败，单张降级到梯队二，已标记角标' }, 'ev-warn');
+  await wait(280);
+  pushEvent('image.done', { node_id: 'n006', source: 'codex', attempts: 2 }, 'ev-ok');
+  setStage('S4', 'done');
+
+  setStage('S5', 'running');
+  await wait(420);
+  const results = tpl.checks.map(c => `${c}: pass`);
+  pushEvent('compile.checked', { 通过: tpl.checks.length + 2, 失败: 0, 含全局底线: ['playtime_min', 'no_placeholder_art'] }, 'ev-ok');
+  await wait(360);
+  pushEvent('build.done', { html: `D:\\chenshi-data\\builds\\${topic}.html`, size: '6.4MB' }, 'ev-ok');
+  pushEvent('published', { 已上大厅: true }, 'ev-ok');
+  setStage('S5', 'done');
+  toast(`「${topic}」已编译并发布到大厅`);
+}
+
+/** SSE：断线指数退避重连 + Last-Event-ID 补拉。store 是时间线的物化视图。 */
+function subscribeSSE(pid) {
+  let lastId = 0, backoff = 500;
+  const connect = () => {
+    const es = new EventSource(`${platform.apiBase}/projects/${pid}/events`);
+    es.onmessage = e => {
+      backoff = 500;
+      lastId = Number(e.lastEventId) || lastId;
+      const v = JSON.parse(e.data);
+      pushEvent(v.kind, v.payload, v.kind.includes('fail') ? 'ev-bad' : 'ev-ok');
+    };
+    es.onerror = () => {
+      es.close();
+      setTimeout(async () => {
+        // 补拉断线期间的事件，状态自动收敛
+        try {
+          const r = await api(`/projects/${pid}/timeline?after=${lastId}`);
+          r.events.forEach(v => pushEvent(v.kind, v.payload));
+          lastId = r.events.at(-1)?.id ?? lastId;
+        } catch {}
+        backoff = Math.min(backoff * 2, 10000);
+        connect();
+      }, backoff);
+    };
+  };
+  connect();
+}
+
+// ============================================================================
+// toast
+// ============================================================================
+let toastEl;
+function toast(msg) {
+  toastEl?.remove();
+  toastEl = document.createElement('div');
+  toastEl.className = 'toast';
+  toastEl.textContent = msg;
+  document.body.appendChild(toastEl);
+  setTimeout(() => toastEl?.remove(), 3200);
+}
+
+// ============================================================================
+// 启动
+// ============================================================================
+(async function boot() {
+  let templates = DEMO_TEMPLATES, games = DEMO_GAMES, online = false;
+
+  if (platform.apiBase) {
+    try {
+      const [t, h] = await Promise.all([api('/templates'), api('/hall/feed')]);
+      // 后端契约与演示数据字段一致；补上展示用的 hue / desc
+      templates = t.items.map((x, i) => ({ ...x, hue: DEMO_TEMPLATES[i]?.hue ?? i * 47,
+        desc: DEMO_TEMPLATES.find(d => d.id === x.id)?.desc ?? '', 源作: DEMO_TEMPLATES.find(d => d.id === x.id)?.源作 }));
+      if (h.items.length) games = h.items;
+      online = true;
+    } catch {}
+  }
+  document.getElementById('apiState').textContent = online ? '● 已连接后端' : '● 离线演示';
+  document.getElementById('apiState').style.color = online ? 'var(--ok)' : 'var(--tx-3)';
+
+  renderTemplates(templates);
+  document.getElementById('tplSelect').innerHTML =
+    templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  document.getElementById('providerSelect').innerHTML =
+    ['Claude 官方', '智谱 GLM', 'Kimi 月之暗面', 'DeepSeek 深度求索', 'MiniMax', '…共 55 个预设']
+      .map(n => `<option>${n}</option>`).join('');
+
+  mountHall(games);
+
+  // 端差：网页端不渲染目标文件夹与环境医生入口
+  if (!platform.hasDoctor) document.querySelectorAll('[data-desktop-only]').forEach(el => el.remove());
+})();
+</script>
+</body>
+</html>

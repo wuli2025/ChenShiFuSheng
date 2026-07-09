@@ -1,0 +1,242 @@
+/* ============================================================================
+   尘世浮生 · ui-kit design tokens
+   两个主题分区共享同一套 spacing / 圆角 / 阴影 / 字阶 —— 只换色板。
+   这是「像一家公司出品」的关键。页面禁止硬编码任何色值与间距。
+   ========================================================================= */
+
+:root {
+  /* —— 间距：4px 基 —— */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* —— 圆角：三档，不多不少 —— */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 22px; --r-full: 999px;
+
+  /* —— 字阶：与行高成对固定 —— */
+  --fs-xs: 12px;  --lh-xs: 1.5;
+  --fs-sm: 13px;  --lh-sm: 1.6;
+  --fs-md: 15px;  --lh-md: 1.7;
+  --fs-lg: 17px;  --lh-lg: 1.6;
+  --fs-xl: 20px;  --lh-xl: 1.5;
+  --fs-2xl: 24px; --lh-2xl: 1.4;
+  --fs-3xl: 32px; --lh-3xl: 1.25;
+
+  --font-sans: 'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  /* 数字等宽 —— 表格里数字不跳动 */
+  --num: tabular-nums;
+
+  /* —— 动效：全站只用一族缓动，时长三档 —— */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --t-fast: 120ms;
+  --t-base: 240ms;
+  --t-slow: 400ms;
+  /* 三个「招牌时刻」才允许重演出 */
+  --t-signature: 620ms;
+
+  /* —— z 轴七层，写死 —— */
+  --z-base: 0; --z-card: 10; --z-sticky: 100; --z-drawer: 200;
+  --z-modal: 300; --z-toast: 400; --z-player: 500;
+}
+
+/* ---------------------------------------------------------------- 玩家侧：深空琉璃 */
+[data-theme='deep-space'] {
+  --bg-0: #070a12;   /* 最底 */
+  --bg-1: #0b1020;
+  --bg-2: #121a2e;
+  --line: rgba(255, 255, 255, .08);  /* 极细描边 1px 8% 白 */
+  --line-strong: rgba(255, 255, 255, .16);
+
+  --tx-1: #e8eefb;   /* 主文 */
+  --tx-2: #93a5c4;   /* 次文 */
+  --tx-3: #5d6c88;   /* 弱文 */
+
+  --acc: #6ea8ff;
+  --acc-2: #b48cff;
+  --glow: rgba(110, 168, 255, .35);  /* 辉光只给焦点元素 */
+
+  --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --info: #38bdf8;
+
+  --sh-1: 0 1px 2px rgba(0,0,0,.4), inset 0 0 0 1px var(--line);
+  --sh-2: 0 4px 16px rgba(0,0,0,.45), inset 0 0 0 1px var(--line);
+  --sh-3: 0 12px 40px rgba(0,0,0,.55), inset 0 0 0 1px var(--line);
+  --sh-4: 0 24px 80px rgba(0,0,0,.65), inset 0 0 0 1px var(--line-strong);
+}
+
+/* ---------------------------------------------------------------- 创作侧：奶油琉璃 */
+[data-theme='cream-glass'] {
+  --bg-0: #f6f4f0;
+  --bg-1: #fdfcfa;
+  --bg-2: #ffffff;
+  --line: rgba(30, 25, 20, .09);
+  --line-strong: rgba(30, 25, 20, .18);
+
+  --tx-1: #2a2622;
+  --tx-2: #6b6259;
+  --tx-3: #9c948a;
+
+  --acc: #4b6fd8;
+  --acc-2: #8a63c9;
+  --glow: rgba(75, 111, 216, .2);
+
+  --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --info: #0284c7;
+
+  --sh-1: 0 1px 2px rgba(30,25,20,.05), inset 0 0 0 1px var(--line);
+  --sh-2: 0 4px 14px rgba(30,25,20,.07), inset 0 0 0 1px var(--line);
+  --sh-3: 0 12px 36px rgba(30,25,20,.10), inset 0 0 0 1px var(--line);
+  --sh-4: 0 24px 72px rgba(30,25,20,.14), inset 0 0 0 1px var(--line-strong);
+}
+
+/* ---------------------------------------------------------------- 基础复位 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg-0);
+  color: var(--tx-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 数字与代码等宽 */
+.num, td.num, .mono { font-variant-numeric: var(--num); font-family: var(--font-mono); }
+
+/* 焦点环全键盘可达 —— 不许 outline:none 了事 */
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* 尊重系统设置：三个招牌时刻也要退让 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------- 基础组件（12 个） */
+
+/* 1. 按钮 */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  height: 38px; padding: 0 var(--sp-4);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--bg-2); color: var(--tx-1);
+  font: inherit; font-size: var(--fs-sm); cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease);
+}
+.btn:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+.btn-primary {
+  background: linear-gradient(135deg, var(--acc), var(--acc-2));
+  border-color: transparent; color: #fff; font-weight: 600;
+}
+.btn-primary:hover { box-shadow: 0 4px 20px var(--glow); }
+.btn-ghost { background: transparent; }
+.btn-lg { height: 46px; padding: 0 var(--sp-5); font-size: var(--fs-md); }
+
+/* 2. 卡片 */
+.card {
+  background: var(--bg-1); border-radius: var(--r-md);
+  box-shadow: var(--sh-2); padding: var(--sp-5);
+  transition: box-shadow var(--t-base) var(--ease), transform var(--t-base) var(--ease);
+}
+.card-hover:hover { box-shadow: var(--sh-3); transform: translateY(-2px); }
+
+/* 3. 输入 */
+.input {
+  width: 100%; height: 40px; padding: 0 var(--sp-3);
+  background: var(--bg-2); color: var(--tx-1);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font: inherit; font-size: var(--fs-sm);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.input:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--glow); outline: none; }
+.input::placeholder { color: var(--tx-3); }
+
+/* 4. 下拉 */
+.select { composes: input; appearance: none; padding-right: var(--sp-6); }
+
+/* 5. 开关 */
+.switch { position: relative; width: 40px; height: 22px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .track {
+  position: absolute; inset: 0; background: var(--bg-2);
+  border: 1px solid var(--line); border-radius: var(--r-full);
+  cursor: pointer; transition: background var(--t-fast) var(--ease);
+}
+.switch .track::before {
+  content: ''; position: absolute; left: 2px; top: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--tx-2);
+  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.switch input:checked + .track { background: var(--acc); border-color: transparent; }
+.switch input:checked + .track::before { transform: translateX(18px); background: #fff; }
+
+/* 6. 标签 */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px var(--sp-2); border-radius: var(--r-sm);
+  font-size: var(--fs-xs); line-height: 1.6;
+  background: color-mix(in srgb, var(--acc) 12%, transparent); color: var(--acc);
+}
+.tag-ok   { background: color-mix(in srgb, var(--ok) 14%, transparent);   color: var(--ok); }
+.tag-warn { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.tag-bad  { background: color-mix(in srgb, var(--bad) 14%, transparent);  color: var(--bad); }
+
+/* 7. 进度 */
+.progress { height: 4px; background: var(--bg-2); border-radius: var(--r-full); overflow: hidden; }
+.progress > i {
+  display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--acc), var(--acc-2));
+  transition: width var(--t-base) var(--ease);
+}
+
+/* 8. 骨架屏 —— 全站统一波纹方向与节奏 */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-2) 25%, var(--bg-1) 37%, var(--bg-2) 63%);
+  background-size: 400% 100%;
+  animation: skeleton 1.4s var(--ease) infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes skeleton { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* 9. toast */
+.toast {
+  position: fixed; right: var(--sp-5); bottom: var(--sp-5); z-index: var(--z-toast);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  background: var(--bg-1); box-shadow: var(--sh-3); font-size: var(--fs-sm);
+  animation: toast-in var(--t-base) var(--ease);
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(12px); } }
+
+/* 10. 对话框 */
+.modal-mask {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+  animation: fade var(--t-base) var(--ease);
+}
+@keyframes fade { from { opacity: 0; } }
+
+/* 11. 空状态 —— 不许白板：插画 + 一句话 + 主行动 */
+.empty { text-align: center; padding: var(--sp-8) var(--sp-5); color: var(--tx-2); }
+.empty svg { opacity: .5; margin-bottom: var(--sp-4); }
+.empty h4 { font-size: var(--fs-lg); color: var(--tx-1); margin-bottom: var(--sp-2); }
+
+/* 12. 角标 */
+.badge {
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-grid; place-items: center;
+  border-radius: var(--r-full); background: var(--bad); color: #fff;
+  font-size: 11px; font-weight: 600; font-variant-numeric: var(--num);
+}
+.badge-fallback { background: var(--warn); }  /* 生图梯队二的角标 */
