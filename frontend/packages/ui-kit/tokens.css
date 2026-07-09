@@ -73,13 +73,15 @@
 
   --tx-1: #2a2622;
   --tx-2: #6b6259;
-  --tx-3: #9c948a;
+  /* 弱文与警告色的取值由 test/wcag.mjs 卡着：对 --bg-0(#f6f4f0) 必须 ≥3.0。
+     原来的 #9c948a(2.72) 与 #d97706(2.90) 都不合规，肉眼看着"还行"而已。 */
+  --tx-3: #8d8478;
 
   --acc: #4b6fd8;
   --acc-2: #8a63c9;
   --glow: rgba(75, 111, 216, .2);
 
-  --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --info: #0284c7;
+  --ok: #16a34a; --warn: #b45309; --bad: #dc2626; --info: #0284c7;
 
   --sh-1: 0 1px 2px rgba(30,25,20,.05), inset 0 0 0 1px var(--line);
   --sh-2: 0 4px 14px rgba(30,25,20,.07), inset 0 0 0 1px var(--line);
@@ -162,8 +164,21 @@ body {
 .input:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--glow); outline: none; }
 .input::placeholder { color: var(--tx-3); }
 
-/* 4. 下拉 */
-.select { composes: input; appearance: none; padding-right: var(--sp-6); }
+/* 4. 下拉 —— 不能写 `composes: input`，那是 CSS Modules 语法，纯 CSS 里静默失效。 */
+.select {
+  width: 100%; height: 40px; padding: 0 var(--sp-6) 0 var(--sp-3);
+  background: var(--bg-2); color: var(--tx-1);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  font: inherit; font-size: var(--fs-sm);
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--tx-2) 50%),
+                    linear-gradient(135deg, var(--tx-2) 50%, transparent 50%);
+  background-position: right 16px center, right 11px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.select:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--glow); outline: none; }
 
 /* 5. 开关 */
 .switch { position: relative; width: 40px; height: 22px; }
@@ -226,11 +241,32 @@ body {
   animation: fade var(--t-base) var(--ease);
 }
 @keyframes fade { from { opacity: 0; } }
+.modal {
+  width: min(480px, calc(100vw - var(--sp-6)));
+  background: var(--bg-1); border-radius: var(--r-lg); box-shadow: var(--sh-4);
+  padding: var(--sp-5); animation: modal-in var(--t-base) var(--ease);
+}
+@keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+.modal h4 { font-size: var(--fs-xl); margin-bottom: var(--sp-2); }
+.modal .actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-5); }
 
 /* 11. 空状态 —— 不许白板：插画 + 一句话 + 主行动 */
 .empty { text-align: center; padding: var(--sp-8) var(--sp-5); color: var(--tx-2); }
-.empty svg { opacity: .5; margin-bottom: var(--sp-4); }
+.empty svg, .empty .art { opacity: .45; margin: 0 auto var(--sp-4); display: block; }
 .empty h4 { font-size: var(--fs-lg); color: var(--tx-1); margin-bottom: var(--sp-2); }
+.empty p { font-size: var(--fs-sm); margin-bottom: var(--sp-4); }
+
+/* 11b. 错误态 —— 三段式：发生了什么 / 怎么办 / 重试。用户可见错误不许只甩一句 stack。 */
+.error-state {
+  border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 6%, transparent);
+  border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+}
+.error-state .what { font-weight: 600; color: var(--bad); margin-bottom: var(--sp-1); }
+.error-state .why  { font-size: var(--fs-sm); color: var(--tx-2); }
+.error-state .how  { font-size: var(--fs-sm); color: var(--tx-1); margin-top: var(--sp-2); }
+.error-state .code { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--tx-3); }
+.error-state .actions { margin-top: var(--sp-3); display: flex; gap: var(--sp-2); }
 
 /* 12. 角标 */
 .badge {

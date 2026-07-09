@@ -143,14 +143,23 @@ async fn consume_loop(
             }
             Err(e) => {
                 let msg = e.to_string();
-                tracing::error!(task = %task.id, error = %msg, "任务失败");
+                // 把原始错误映射成错误码，前端才能渲染「发生了什么/为什么/怎么办」
+                // 三段式，而不是把一句 stack trace 甩给用户。
+                let ec = gen_pipeline::errcode::classify(&msg);
+                tracing::error!(task = %task.id, code = ec.code, error = %msg, "任务失败");
                 // 重试策略在这一层，按任务类型定 —— cli-core 自身不 retry。
                 let can_retry = task.retry < task.kind.max_retry();
                 store.finish_task(&task.id, false, Some(msg.clone()));
                 store.append_event(
                     &task.project_id,
                     if can_retry { "task.retry" } else { "task.failed" },
-                    serde_json::json!({"task_id": task.id, "error": msg}),
+                    serde_json::json!({
+                        "task_id": task.id,
+                        "code": ec.code,
+                        "what": ec.what,
+                        "how": ec.how,
+                        "error": msg,
+                    }),
                 );
             }
         }

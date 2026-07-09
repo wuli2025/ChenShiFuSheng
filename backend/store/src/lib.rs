@@ -87,6 +87,10 @@ pub trait Store: Send + Sync {
     fn templates(&self) -> Vec<Contract>;
     fn publications(&self) -> Vec<Publication>;
     fn publish(&self, p: Publication);
+
+    /// 观测用：全部任务与全部事件的快照。`timeline_events` 天然就是审计日志。
+    fn all_tasks(&self) -> Vec<Task>;
+    fn all_events(&self) -> Vec<TimelineEvent>;
 }
 
 /// worker 侧的队列消费能力。api 不 import 它。
@@ -270,6 +274,14 @@ impl Store for EmbeddedStore {
         db.publications.retain(|x| x.game_id != p.game_id);
         db.publications.push(p);
         self.flush(&db);
+    }
+
+    fn all_tasks(&self) -> Vec<Task> {
+        self.read_db().tasks
+    }
+
+    fn all_events(&self) -> Vec<TimelineEvent> {
+        self.read_db().events
     }
 }
 

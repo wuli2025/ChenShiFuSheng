@@ -10,11 +10,14 @@ use axum::{
 use futures::stream::Stream;
 use gen_pipeline::TaskKind;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/v1/health", get(health))
+        .route("/v1/metrics", get(metrics))
+        .route("/v1/errcodes", get(errcodes))
         .route("/v1/hall/feed", get(hall_feed))
         .route("/v1/templates", get(templates))
         .route("/v1/templates/:id", get(template_detail))
@@ -48,6 +51,98 @@ async fn health(State(st): State<AppState>) -> impl IntoResponse {
         "image_fallback_ready": image_fallback_ready,
         "link_mode_allowed": link_mode,
     }))
+}
+
+// ---------------------------------------------------------------- 观测
+
+/// PRD §06 四核心看板：任务成功率 / CLI p95 时长 / 队列深度 / 生图失败率+降级率。
+///
+/// 数据源就是 `timeline_events` —— 它天然是审计日志，不需要另建一套埋点。
+async fn metrics(State(st): State<AppState>) -> impl IntoResponse {
+    let tasks = st.store.all_tasks();
+    let events = st.store.all_events();
+
+    // ① 任务成功率
+    let done = tasks.iter().filter(|t| t.state == "done").count();
+    let failed = tasks.iter().filter(|t| t.state == "failed").count();
+    let settled = done + failed;
+    let success_rate = if settled == 0 { 1.0 } else { done as f64 / settled as f64 };
+
+    // ② CLI 时长 p95：task.running → task.done/failed 的时间差
+    let mut started: HashMap<String, i64> = HashMap::new();
+    let mut durations: Vec<i64> = Vec::new();
+    for e in &events {
+        let Some(tid) = e.payload.get("task_id").and_then(|v| v.as_str()) else { continue };
+        match e.kind.as_str() {
+            "task.running" => {
+                started.insert(tid.to_string(), e.created_at);
+            }
+            "task.done" | "task.failed" => {
+                if let Some(t0) = started.remove(tid) {
+                    durations.push((e.created_at - t0).max(0));
+                }
+            }
+            _ => {}
+        }
+    }
+    durations.sort_unstable();
+    let p = |q: f64| -> i64 {
+        if durations.is_empty() { return 0 }
+        let i = ((durations.len() as f64 - 1.0) * q).round() as usize;
+        durations[i]
+    };
+
+    // ③ 队列深度
+    let queued = tasks.iter().filter(|t| t.state == "queued").count();
+    let running = tasks.iter().filter(|t| t.state == "running").count();
+
+    // ④ 生图失败率 + 降级率
+    let img_ok = events.iter().filter(|e| e.kind == "image.done").count();
+    let img_fail = events.iter().filter(|e| e.kind == "image.failed").count();
+    let img_fallback = events
+        .iter()
+        .filter(|e| e.kind == "image.done" && e.payload.get("source").and_then(|v| v.as_str()) == Some("api_fallback"))
+        .count();
+    let img_total = img_ok + img_fail;
+
+    Json(serde_json::json!({
+        "task_success_rate": round3(success_rate),
+        "task_done": done, "task_failed": failed,
+        "cli_duration_sec": { "p50": p(0.5), "p95": p(0.95), "max": durations.last().copied().unwrap_or(0) },
+        "queue": { "queued": queued, "running": running },
+        "image": {
+            "total": img_total,
+            "failure_rate": if img_total == 0 { 0.0 } else { round3(img_fail as f64 / img_total as f64) },
+            // 降级率：走了梯队二的图占成功图的比例。持续偏高说明 codex 环境有问题。
+            "fallback_rate": if img_ok == 0 { 0.0 } else { round3(img_fallback as f64 / img_ok as f64) },
+        },
+        // 失败任务按错误码聚合，直接看出是哪类问题在拖后腿
+        "failures_by_code": failures_by_code(&events),
+    }))
+}
+
+fn round3(v: f64) -> f64 {
+    (v * 1000.0).round() / 1000.0
+}
+
+fn failures_by_code(events: &[crate::store::TimelineEvent]) -> serde_json::Value {
+    let mut m: HashMap<String, usize> = HashMap::new();
+    for e in events.iter().filter(|e| e.kind == "task.failed") {
+        let code = e
+            .payload
+            .get("code")
+            .and_then(|v| v.as_str())
+            .unwrap_or("E-UNKNOWN")
+            .to_string();
+        *m.entry(code).or_default() += 1;
+    }
+    serde_json::to_value(m).unwrap_or(serde_json::Value::Null)
+}
+
+/// 错误码表：前端拉一次，渲染「发生了什么/为什么/怎么办」三段式。
+/// 前后端同一份真源，文案不会漂移。
+async fn errcodes() -> impl IntoResponse {
+    Json(serde_json::json!({ "items": gen_pipeline::errcode::ALL }))
 }
 
 // ---------------------------------------------------------------- hall

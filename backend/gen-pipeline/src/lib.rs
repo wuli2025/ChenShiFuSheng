@@ -5,6 +5,7 @@
 //! 校验由 `contract.checks` 驱动 —— 规则是数据，不是代码。
 
 pub mod checks;
+pub mod errcode;
 pub mod image;
 pub mod prompts;
 pub mod script;
@@ -13,6 +14,7 @@ pub mod template;
 use serde::{Deserialize, Serialize};
 
 pub use checks::{ArtAudit, CheckResult, Report};
+pub use errcode::ErrCode;
 pub use image::{FallbackPolicy, ImageOutcome, ImageSource};
 pub use script::Script;
 pub use template::Contract;
