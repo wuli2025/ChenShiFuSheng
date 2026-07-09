@@ -1,8 +1,12 @@
 import { chromium } from 'playwright';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+// 由 npm run test:game 先编译 fixture 剧本产出
+const URL = 'file://' + join(dirname(fileURLToPath(import.meta.url)), '../dist/sample-game.html');
 const b = await chromium.launch();
 const p = await b.newPage({ viewport:{width:1280,height:800} });
 const errs=[]; p.on('pageerror',e=>errs.push(e.message));
-await p.goto('file:///tmp/兽医人生.html');
+await p.goto(URL);
 await p.waitForTimeout(400);
 console.log('=== 单文件游戏产物 · 真实可玩性验证');
 console.log('  启动幕 ' + (await p.locator('#start').count() ? '✓' : '✗'));

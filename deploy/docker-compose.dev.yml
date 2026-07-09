@@ -1,0 +1,55 @@
+# 单机全家桶：一条命令起完整环境。
+#   docker compose -f deploy/docker-compose.dev.yml up
+#
+# 与 prod 的差别：单副本、端口直出（不过 nginx）、代码挂载热更、PG 不持久化。
+services:
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile.api }
+    ports: ['8080:8080']
+    environment:
+      CHENSHI_DATA_DIR: /data
+      CHENSHI_WEB_DIR: /srv/web
+      RUST_LOG: debug
+      # dev 默认用 EmbeddedStore（JSON），不依赖 PG —— 起得快，方便调试。
+      # 要试 PG 路径就取消下面两行的注释。
+      # DATABASE_URL: postgres://chenshi:dev@pg/chenshi
+      # REDIS_URL: redis://redis:6379
+    volumes:
+      - chenshi-data:/data
+      - ../frontend:/srv/web:ro   # 前端改完刷新即可，不用重建镜像
+    restart: unless-stopped
+
+  worker:
+    build: { context: .., dockerfile: deploy/Dockerfile.worker }
+    environment:
+      CHENSHI_DATA_DIR: /data
+      CHENSHI_WORKER_SLOTS: 2
+      RUST_LOG: debug
+      # 本地开发默认不真调 CLI，免得烧 token。要跑真链路就注掉这行。
+      CHENSHI_DRY_RUN: '1'
+      IMAGE_API_BASE_URL: ${IMAGE_API_BASE_URL:-}
+      IMAGE_API_KEY: ${IMAGE_API_KEY:-}
+    volumes:
+      - chenshi-data:/data
+      # CLI 登录态从宿主机带进来（否则容器里要重新 claude /login）
+      - ${HOME}/.claude:/home/node/.claude
+      - ${HOME}/.codex:/home/node/.codex
+    restart: unless-stopped
+
+  # 想试云端存储路径时再起这两个
+  pg:
+    image: postgres:16-alpine
+    profiles: ['cloud']
+    environment:
+      POSTGRES_USER: chenshi
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: chenshi
+    ports: ['5432:5432']
+
+  redis:
+    image: redis:7-alpine
+    profiles: ['cloud']
+    ports: ['6379:6379']
+
+volumes:
+  chenshi-data:

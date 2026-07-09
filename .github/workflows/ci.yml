@@ -1,59 +1,96 @@
+# 质量门禁（PRD §06）：任一红禁止合并。
+#
+# 有意不在 CI 里跑真调 CLI 的冒烟（cli-core/examples/smoke.rs）——
+# 那要登录态且会烧 token。它是本地/预发环境的手动闸门，见 docs/REFACTOR_PROGRESS.md。
 name: CI
 
-# 在 push / PR 到 main 时跑: Rust fmt + clippy + 单测(全部硬门槛) + 前端构建。
-# 游戏平台精简后:只剩桌面壳单包(polaris-app),Polaris 的 server/Forge/sandbox 路径已下线,
-# 对应的 forge-matrix / forge-e2e / polaris-cli 三个 CI job 一并移除。
 on:
-  push:
-    branches: [main]
+  push: { branches: [main, master] }
   pull_request:
-    branches: [main]
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  # CI 里没有系统代理，但保持与本地一致，避免行为漂移
+  no_proxy: 127.0.0.1,localhost
 
 jobs:
-  rust:
-    name: Rust (test + clippy)
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: src-tauri
+  backend:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
+        with: { components: clippy, rustfmt }
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      # tauri::generate_context! 在编译期要求 frontendDist(../dist)存在,否则 proc macro panic。
-      # 后端单测不需要真前端,放个 stub index.html 满足它即可(真前端由 frontend job 验)。
-      - name: Stub frontend dist (满足 tauri generate_context!)
-        shell: bash
-        run: mkdir -p ../dist && echo '<!doctype html><title>stub</title>' > ../dist/index.html
-      # 硬门槛: 格式必须规整 (存量已清零, 见 2026-07 收紧)
-      - name: Format check
-        run: cargo fmt --all --check
-      # 硬门槛: clippy 零告警 (-D warnings, 存量已清零)
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      # 硬门槛: 单测必须过 (含 kb 路径穿越 / codex_proxy 解析边界等回归测试)
-      - name: Test
-        run: cargo test --workspace
+        with: { workspaces: backend }
+
+      - name: clippy -D warnings
+        working-directory: backend
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: backend
+        run: cargo test --all
+
+      # 契约驱动的证明：不同模板对同一剧本给出不同判决，SVG 一律被拒
+      - name: 契约跨模板判决
+        working-directory: backend
+        run: cargo run -q -p gen-pipeline --example verify_contract -- ../docs/fixtures/sample-script.json
 
   frontend:
-    name: Frontend (type-check + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      # npm run build = vue-tsc --noEmit && vite build (类型检查 + 打包)
-      - run: npm run build
-      - run: npm run check:contract
-      - run: npm run audit:prod
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+
+      - name: install
+        working-directory: frontend
+        run: npm ci || npm i
+
+      # 色板改动如果掉出 WCAG AA，这一步就红
+      - name: WCAG AA 色板校验
+        working-directory: frontend
+        run: node test/wcag.mjs
+
+      - name: 版本号同源
+        working-directory: frontend
+        run: node test/version.mjs
+
+      - name: 自包含打包（产物含外链即失败）
+        working-directory: frontend
+        run: node build.mjs dist/尘世浮生.html
+
+      - name: playwright 浏览器
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # 大厅：0 运行时错误 / 60fps / 交互链路 / 无横向溢出
+      - name: 冒烟 · 大厅与全链路
+        working-directory: frontend
+        run: node test/smoke.mjs
+
+      - name: 冒烟 · 四档视口
+        working-directory: frontend
+        run: node test/viewport.mjs
+
+      # 水晶球「画了但被背景层盖住」这类事故，只有对截图取样才抓得到
+      - name: 冒烟 · 水晶球真可见
+        working-directory: frontend
+        run: node test/hall-visible.mjs
+
+      - name: 冒烟 · 水晶球布局不重叠不溢出
+        working-directory: frontend
+        run: node test/hall-layout.mjs
+
+      - name: 冒烟 · 单文件游戏产物可玩
+        working-directory: frontend
+        run: node test/game-smoke.mjs
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: gitleaks（secrets 永不进 git）
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }

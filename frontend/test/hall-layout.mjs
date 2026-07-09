@@ -1,10 +1,14 @@
 import { chromium } from 'playwright';
+import { serve } from './serve.mjs';
+
+const srv = await serve();
+const BASE = process.env.BASE ?? srv.base;
 const b=await chromium.launch({args:['--no-proxy-server']});
 console.log('=== 水晶球布局几何断言：不重叠 · 不溢出');
 let bad=0;
 for (const [w,h] of [[1440,900],[1920,1080],[768,1024],[390,844]]) {
   const p=await b.newPage({viewport:{width:w,height:h}});
-  await p.goto((process.env.BASE ?? 'http://127.0.0.1:17801') + '/apps/web/index.html',{waitUntil:'networkidle'});
+  await p.goto(BASE + '/apps/web/index.html',{waitUntil:'networkidle'});
   await p.waitForTimeout(700);
   const rows=[];
   for (const n of [1,2,5,10,30,80]) {
@@ -32,5 +36,6 @@ for (const [w,h] of [[1440,900],[1920,1080],[768,1024],[390,844]]) {
   await p.close();
 }
 await b.close();
+await srv.close();
 console.log('\n  '+(bad?`✗ ${bad} 组不合格`:'✓ 全部视口 × 全部球数：无重叠、无溢出'));
 process.exit(bad?1:0);

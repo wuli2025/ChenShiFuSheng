@@ -23,6 +23,9 @@ fn main() -> anyhow::Result<()> {
         ("完全无图", ArtAudit::default()),
     ];
 
+    // CI 门禁必须**断言**，不能只打印 —— 否则它永远返回 0，等于没跑。
+    let mut violations: Vec<String> = Vec::new();
+
     for c in builtin() {
         println!("━━ 模板 {} ({})", c.name, c.id);
         for (label, art) in &scenarios {
@@ -30,11 +33,44 @@ fn main() -> anyhow::Result<()> {
             let f = r.failures();
             let verdict = if r.passed() { "✓ 通过".to_string() } else { format!("✗ 拒绝 ({} 项)", f.len()) };
             println!("   {label:<18} {verdict}");
-            for x in f {
+            for x in &f {
                 println!("       · {}: {}", x.name, x.detail);
+            }
+
+            // ① 全局硬底线：任何模板下，SVG / 无图都必须被拒。
+            if label.contains("SVG") || label.contains("无图") {
+                let rejected_for_art = f.iter().any(|x| x.name == "no_placeholder_art");
+                if !rejected_for_art {
+                    violations.push(format!("{} × {label}：SVG/无图竟然没被 no_placeholder_art 拒绝", c.id));
+                }
+            }
+
+            // ② 这份 fixture 是照着「经典款」写的，它必须过；
+            //    梯队二降级(api_fallback)同样算真生图，也必须过。
+            if c.id == "life-seven-classic" && (label.contains("codex 真生图") || label.contains("梯队二降级")) && !r.passed() {
+                violations.push(format!("{} × {label}：合格剧本被误拒 —— {:?}", c.id,
+                    f.iter().map(|x| x.name.as_str()).collect::<Vec<_>>()));
             }
         }
         println!();
     }
+
+    // ③ 「不要生成的都是一个样子」：至少要有两个模板对同一剧本给出不同判决。
+    let verdicts: Vec<bool> = builtin()
+        .iter()
+        .map(|c| checks::run(&script, c, &scenarios[0].1).passed())
+        .collect();
+    if verdicts.iter().all(|v| *v == verdicts[0]) {
+        violations.push("所有模板判决一致 —— 规则没有随模板变，模板化失效".into());
+    }
+
+    if !violations.is_empty() {
+        eprintln!("✗ 契约门禁未通过：");
+        for v in &violations {
+            eprintln!("   · {v}");
+        }
+        std::process::exit(1);
+    }
+    println!("✓ 契约门禁通过：SVG/无图一律被拒；合格剧本在其目标模板下通过；模板判决存在差异");
     Ok(())
 }

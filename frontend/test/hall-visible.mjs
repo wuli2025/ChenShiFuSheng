@@ -1,7 +1,11 @@
 import { chromium } from 'playwright';
+import { serve } from './serve.mjs';
+
+const srv = await serve();
+const BASE = process.env.BASE ?? srv.base;
 const b=await chromium.launch({args:['--no-proxy-server']});
 const p=await b.newPage({viewport:{width:1440,height:900}});
-await p.goto((process.env.BASE ?? 'http://127.0.0.1:17801') + '/apps/web/index.html',{waitUntil:'networkidle'});
+await p.goto(BASE + '/apps/web/index.html',{waitUntil:'networkidle'});
 await p.waitForTimeout(1200);
 
 // 真正的可见性：截屏后看球心位置的像素，而不是查 canvas 内存
@@ -26,4 +30,5 @@ console.log(`  球心亮度 ${r.orb}  空白处亮度 ${r.empty}`);
 console.log('  '+(r.orb > r.empty + 40 ? '✓ 球明显亮于背景，可见' : '✗ 球被遮挡或未绘制'));
 await p.screenshot({path:'/tmp/hall_fixed.png'});
 await b.close();
+await srv.close();
 process.exit(r.orb > r.empty + 40 ? 0 : 1);

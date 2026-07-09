@@ -93,3 +93,7 @@ _legacy/**/node_modules/
 node_modules/
 backend/target/
 dist/
+
+node_modules
+dist/
+.env

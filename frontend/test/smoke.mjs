@@ -1,6 +1,10 @@
 import { chromium } from 'playwright';
 
-const url = 'file:///tmp/尘世浮生.html';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const here = dirname(fileURLToPath(import.meta.url));
+// 打包产物是自包含的，file:// 直接可跑（不像原始 index.html 会被 CORS 拦 ESM import）
+const url = 'file://' + join(here, '../dist/尘世浮生.html');
 const errors = [];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
