@@ -52,21 +52,67 @@ fn harden_child_env(cmd: &mut Command) {
     cmd.env_remove("LD_PRELOAD");
 }
 
-/// 隔离模式：CLAUDE_CONFIG_DIR / CODEX_HOME 指向本任务私有目录。
+/// 配置目录隔离。**这里踩过一个大坑，改之前先读完。**
 ///
-/// 两个作用：① 会话账本不进 ~/.claude/projects，外部监控看不见平台自动任务；
-/// ② **并发生图时每条线必须有独立 CODEX_HOME**，否则会话互相踩踏（画布引擎 server.js 的 w1/w2 做法）。
+/// - **claude**：只有跑第三方供应商（env_patch 里带 `ANTHROPIC_*`）时才指私有 CONFIG_DIR ——
+///   那种情况下认证走 env 里的 token，不需要登录态。
+///   若走官方档（env_patch 为空），**必须继承默认 `~/.claude`**，否则子进程拿不到登录态，
+///   一律报 `Not logged in · Please run /login`。
+///   （原 `chat.rs::scope_child_claude` 也是只在隔离模式下才设。）
+///
+/// - **codex**：并发生图时每条线必须有独立 `CODEX_HOME`，否则会话互相踩踏
+///   （画布引擎 server.js 的 w1/w2 做法）。但空目录同样没有登录态，
+///   所以要把真 `CODEX_HOME` 里的凭据**种**进去。
 fn scope_child_config(cmd: &mut Command, job: &CliJob) {
-    let private = job.cwd.join(".cli-home");
-    let _ = std::fs::create_dir_all(&private);
     match job.engine {
         Engine::Claude => {
-            cmd.env("CLAUDE_CONFIG_DIR", &private);
+            let third_party = job
+                .env_patch
+                .0
+                .keys()
+                .any(|k| k.starts_with("ANTHROPIC_"));
+            if third_party {
+                let private = job.cwd.join(".claude-home");
+                let _ = std::fs::create_dir_all(&private);
+                cmd.env("CLAUDE_CONFIG_DIR", &private);
+            }
+            // else: 不动 CLAUDE_CONFIG_DIR，继承宿主登录态。
         }
         Engine::Codex => {
-            cmd.env("CODEX_HOME", &private);
+            let private = job.cwd.join(".codex-home");
+            if std::fs::create_dir_all(&private).is_ok() {
+                seed_codex_home(&private);
+                cmd.env("CODEX_HOME", &private);
+            }
         }
     }
+}
+
+/// 把真 CODEX_HOME 里的凭据与配置复制进并发线的私有目录。
+/// 只拷凭据/配置这几个文件，不拷会话历史 —— 那正是我们要隔离的东西。
+fn seed_codex_home(private: &std::path::Path) {
+    let Some(src) = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs_home().map(|h| h.join(".codex")))
+    else {
+        return;
+    };
+    if !src.is_dir() || src == private {
+        return;
+    }
+    for name in ["auth.json", "config.toml", "config.json"] {
+        let from = src.join(name);
+        let to = private.join(name);
+        if from.is_file() && !to.exists() {
+            let _ = std::fs::copy(&from, &to);
+        }
+    }
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
 }
 
 #[cfg(windows)]
@@ -172,6 +218,28 @@ fn build_command(job: &CliJob) -> Result<Command, CliError> {
     Ok(cmd)
 }
 
+/// 在 `run()` 的整个生命周期里持有子进程 pid。
+///
+/// **这是防僵尸进程的最后一道闸。** future 被 `abort()` / 被 drop（超时、任务取消、
+/// worker 关停）时，Rust 只会 drop 局部变量，不会替你回收已 spawn 的子进程树。
+/// 没有这个 guard，每一次取消都会留下一棵孤儿 CLI 进程树占着 CPU 和端口。
+struct ProcGuard {
+    pid: Option<u32>,
+    /// 正常跑完时置 true，Drop 就不再动手。
+    finished: bool,
+}
+
+impl Drop for ProcGuard {
+    fn drop(&mut self) {
+        if !self.finished {
+            if let Some(pid) = self.pid {
+                tracing::warn!(pid, "任务未正常结束（取消/超时/panic），回收进程树");
+                kill_tree(pid);
+            }
+        }
+    }
+}
+
 pub struct JobHandle {
     pid: Option<u32>,
     cancelled: Arc<AtomicBool>,
@@ -203,11 +271,16 @@ pub async fn run(job: CliJob, mut sink: impl CliSink) -> Result<CliResult, CliEr
     let mut cmd = build_command(&job)?;
     let engine_name = job.engine.as_str();
 
+    // kill_on_drop 只收直接子进程；整棵子孙树靠下面的 ProcGuard + kill_tree。
+    cmd.kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|e| CliError::Spawn {
         engine: engine_name,
         source: e,
     })?;
     let pid = child.id();
+    // 从这一行起，无论怎么退出（return / ? / panic / future 被 abort），
+    // 进程树都会被回收。
+    let mut guard = ProcGuard { pid, finished: false };
     let cancelled = Arc::new(AtomicBool::new(false));
     let handle = JobHandle {
         pid,
@@ -331,6 +404,8 @@ pub async fn run(job: CliJob, mut sink: impl CliSink) -> Result<CliResult, CliEr
     }
 
     let status = child.wait().await?;
+    // 子进程已自然退出，Drop 不必再 kill（pid 可能已被复用，误杀无辜进程）。
+    guard.finished = true;
     let exit_code = status.code();
     // 成败双重判定：退出码 **和** turn.failed。codex 退出码 0 也可能 turn.failed。
     let ok = status.success() && !turn_failed;

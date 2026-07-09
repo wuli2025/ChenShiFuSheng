@@ -32,48 +32,68 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let store = api_store(&data)?;
+    let store = std::sync::Arc::new(api_store(&data)?);
     let dry = std::env::var("CHENSHI_DRY_RUN").is_ok();
     if dry {
         tracing::warn!("DRY_RUN 模式：不真实调用 CLI，仅走流程与校验");
     }
 
+    // 并发消费槽。**串行会让一个重任务把所有轻任务堵死** —— 写剧本要跑十几分钟，
+    // 期间用户提交一个改节点，得等剧本写完才动，体验不可接受。
+    // 每个槽独立 claim；claim 是原子的（读盘→改→原子写，进程内加锁）。
+    let slots: usize = std::env::var("CHENSHI_WORKER_SLOTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4);
+    tracing::info!(slots, "启动消费槽");
+
+    let mut handles = Vec::new();
+    for slot in 0..slots {
+        let store = store.clone();
+        let wid = format!("{worker_id}#{slot}");
+        handles.push(tokio::spawn(async move { consume_loop(store, wid, dry).await }));
+    }
+    for h in handles {
+        let _ = h.await;
+    }
+    Ok(())
+}
+
+async fn consume_loop(store: std::sync::Arc<exec::EmbeddedStore>, worker_id: String, dry: bool) {
     loop {
-        match store.claim_task(&worker_id) {
-            Some(task) => {
-                tracing::info!(task = %task.id, kind = ?task.kind, "领取任务");
+        let Some(task) = store.claim_task(&worker_id) else {
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            continue;
+        };
+
+        tracing::info!(task = %task.id, kind = ?task.kind, worker = %worker_id, "领取任务");
+        store.append_event(
+            &task.project_id,
+            "task.running",
+            serde_json::json!({"task_id": task.id, "kind": task.kind}),
+        );
+
+        match exec::run_task(&task, &store, dry).await {
+            Ok(payload) => {
+                store.finish_task(&task.id, true, None);
                 store.append_event(
                     &task.project_id,
-                    "task.running",
-                    serde_json::json!({"task_id": task.id, "kind": task.kind}),
+                    "task.done",
+                    serde_json::json!({"task_id": task.id, "kind": task.kind, "result": payload}),
                 );
-
-                let result = exec::run_task(&task, &store, dry).await;
-
-                match result {
-                    Ok(payload) => {
-                        store.finish_task(&task.id, true, None);
-                        store.append_event(
-                            &task.project_id,
-                            "task.done",
-                            serde_json::json!({"task_id": task.id, "kind": task.kind, "result": payload}),
-                        );
-                    }
-                    Err(e) => {
-                        let msg = e.to_string();
-                        tracing::error!(task = %task.id, error = %msg, "任务失败");
-                        // 重试策略在这一层，按任务类型定 —— cli-core 自身不 retry。
-                        let can_retry = task.retry < task.kind.max_retry();
-                        store.finish_task(&task.id, false, Some(msg.clone()));
-                        store.append_event(
-                            &task.project_id,
-                            if can_retry { "task.retry" } else { "task.failed" },
-                            serde_json::json!({"task_id": task.id, "error": msg}),
-                        );
-                    }
-                }
             }
-            None => tokio::time::sleep(Duration::from_millis(800)).await,
+            Err(e) => {
+                let msg = e.to_string();
+                tracing::error!(task = %task.id, error = %msg, "任务失败");
+                // 重试策略在这一层，按任务类型定 —— cli-core 自身不 retry。
+                let can_retry = task.retry < task.kind.max_retry();
+                store.finish_task(&task.id, false, Some(msg.clone()));
+                store.append_event(
+                    &task.project_id,
+                    if can_retry { "task.retry" } else { "task.failed" },
+                    serde_json::json!({"task_id": task.id, "error": msg}),
+                );
+            }
         }
     }
 }
