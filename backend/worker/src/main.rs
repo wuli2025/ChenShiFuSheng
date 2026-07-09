@@ -47,23 +47,71 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(4);
     tracing::info!(slots, "启动消费槽");
 
+    // 关停信号。**不装这个的后果**：`kill worker` 时 SIGTERM 直接终止进程，
+    // Rust 的 Drop 根本不跑，cli-core 的 ProcGuard 无从回收 —— 每个在飞的
+    // CLI 进程都变成孤儿，占着 CPU 继续烧 token。实测确实会留下。
+    let shutdown = std::sync::Arc::new(tokio::sync::Notify::new());
+    {
+        let shutdown = shutdown.clone();
+        tokio::spawn(async move {
+            wait_for_signal().await;
+            tracing::warn!("收到关停信号，取消在飞任务并回收进程树");
+            shutdown.notify_waiters();
+        });
+    }
+
     let mut handles = Vec::new();
     for slot in 0..slots {
         let store = store.clone();
         let wid = format!("{worker_id}#{slot}");
-        handles.push(tokio::spawn(async move { consume_loop(store, wid, dry).await }));
+        let sd = shutdown.clone();
+        handles.push(tokio::spawn(async move { consume_loop(store, wid, dry, sd).await }));
     }
     for h in handles {
         let _ = h.await;
     }
+    // 给 ProcGuard 的 kill_tree 留出落地时间。
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    tracing::info!("worker 已退出");
     Ok(())
 }
 
-async fn consume_loop(store: std::sync::Arc<exec::EmbeddedStore>, worker_id: String, dry: bool) {
+#[cfg(unix)]
+async fn wait_for_signal() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut term = signal(SignalKind::terminate()).expect("SIGTERM");
+    let mut int = signal(SignalKind::interrupt()).expect("SIGINT");
+    tokio::select! {
+        _ = term.recv() => {}
+        _ = int.recv() => {}
+    }
+}
+
+#[cfg(not(unix))]
+async fn wait_for_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+async fn consume_loop(
+    store: std::sync::Arc<exec::EmbeddedStore>,
+    worker_id: String,
+    dry: bool,
+    shutdown: std::sync::Arc<tokio::sync::Notify>,
+) {
     loop {
-        let Some(task) = store.claim_task(&worker_id) else {
-            tokio::time::sleep(Duration::from_millis(800)).await;
-            continue;
+        // 关停时：正在跑的 run_task 被 select 取消 → 局部变量 drop →
+        // ProcGuard::drop → kill_tree。任务留在 running 态，由 api 的孤儿租约
+        // 扫描退回队列（不作废）。
+        let claimed = tokio::select! {
+            biased;
+            _ = shutdown.notified() => return,
+            t = async { store.claim_task(&worker_id) } => t,
+        };
+        let Some(task) = claimed else {
+            tokio::select! {
+                _ = shutdown.notified() => return,
+                _ = tokio::time::sleep(Duration::from_millis(800)) => continue,
+            }
         };
 
         tracing::info!(task = %task.id, kind = ?task.kind, worker = %worker_id, "领取任务");
@@ -73,7 +121,18 @@ async fn consume_loop(store: std::sync::Arc<exec::EmbeddedStore>, worker_id: Str
             serde_json::json!({"task_id": task.id, "kind": task.kind}),
         );
 
-        match exec::run_task(&task, &store, dry).await {
+        // 关停必须能打断正在跑的任务本身 —— 否则一个十几分钟的写剧本任务
+        // 会让 worker 拖着不退，容器等到超时被 SIGKILL，进程树照样成孤儿。
+        let outcome = tokio::select! {
+            biased;
+            _ = shutdown.notified() => {
+                tracing::warn!(task = %task.id, "关停中断任务，进程树已回收；任务由孤儿租约退回队列");
+                return;
+            }
+            r = exec::run_task(&task, &store, dry) => r,
+        };
+
+        match outcome {
             Ok(payload) => {
                 store.finish_task(&task.id, true, None);
                 store.append_event(
