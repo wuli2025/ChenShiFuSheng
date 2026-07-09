@@ -55,10 +55,13 @@ h3.sec { font-size: var(--fs-lg); margin: var(--sp-6) 0 var(--sp-3); }
 /* ==================== 大厅 ==================== */
 #hall { display: flex; flex-direction: column; }
 .hall-stage { flex: 1; position: relative; min-height: 0; }
-.hall-stage canvas { width: 100%; height: 100%; display: block; }
+/* canvas 必须显式 position + z-index 压过 ::before。
+   ::before 是 absolute，canvas 若是 static 就会被它整个盖住 —— 球照画、hover 照中，
+   但一个也看不见（::before 是 pointer-events:none，所以交互测试发现不了）。 */
+.hall-stage canvas { width: 100%; height: 100%; display: block; position: relative; z-index: 1; }
 /* 星域背景：静态渐变 + 极稀疏星点，不用粒子系统（省帧） */
 .hall-stage::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background:
     radial-gradient(ellipse 70% 60% at 50% 40%, rgba(80,110,200,.16), transparent 70%),
     radial-gradient(circle at 18% 22%, rgba(255,255,255,.5) .6px, transparent .6px),
@@ -466,6 +469,8 @@ function mountHall(items) {
   });
   hall.setItems(items);
   hall.start();
+  // 供自动化几何断言使用（布局是否重叠/溢出）。不影响生产行为。
+  window.__hall = hall;
 }
 
 document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
@@ -638,7 +643,9 @@ document.getElementById('forgeBtn').onclick = async () => {
   if (platform.apiBase) {
     try {
       const r = await api('/projects', { method: 'POST', body: JSON.stringify({ topic, template_id: tplId }) });
-      pushEvent('project.created', { project_id: r.project_id }, 'ev-ok');
+      // 不要在这里 pushEvent —— 事件的唯一真源是时间线。
+      // 立项瞬间后端已经 emit 了 project.created 与 task.queued，
+      // 而 SSE 要等下一行才连上；先补拉再订阅，否则这些事件永远看不到。
       subscribeSSE(r.project_id);
       return;
     } catch { /* 落到离线演示 */ }
@@ -688,29 +695,58 @@ async function simulate(topic, tpl) {
   toast(`「${topic}」已编译并发布到大厅`);
 }
 
-/** SSE：断线指数退避重连 + Last-Event-ID 补拉。store 是时间线的物化视图。 */
+/**
+ * 时间线订阅。store 是「时间线的物化视图」：
+ * 先补拉 after=lastId，再订阅 SSE —— 顺序不能反，否则订阅前已广播的事件会永久丢失。
+ * 断线后走同一条路径，所以重连天然收敛，不需要手工刷新。
+ */
 function subscribeSSE(pid) {
-  let lastId = 0, backoff = 500;
-  const connect = () => {
-    const es = new EventSource(`${platform.apiBase}/projects/${pid}/events`);
-    es.onmessage = e => {
-      backoff = 500;
-      lastId = Number(e.lastEventId) || lastId;
-      const v = JSON.parse(e.data);
-      pushEvent(v.kind, v.payload, v.kind.includes('fail') ? 'ev-bad' : 'ev-ok');
-    };
+  let lastId = 0, backoff = 500, es = null;
+
+  // 事件种类 → 流水线阶段。时间线是真源，流水线只是它的一个视图。
+  const STAGE = {
+    'project.created': ['S1', 'done'], 'task.queued': ['S2', 'running'],
+    'task.running': ['S2', 'running'], 'task.failed': ['S2', 'failed'],
+    'graph.settled': ['S3', 'done'], 'image.done': ['S4', 'running'],
+    'image.failed': ['S4', 'failed'], 'compile.checked': ['S5', 'running'],
+    'build.done': ['S5', 'done'], 'published': ['S5', 'done'],
+    'publish.rejected': ['S5', 'failed'],
+  };
+
+  // 事件 id 单调递增，据此去重：补拉与 SSE 可能送来同一条。
+  const apply = v => {
+    const id = Number(v.id) || 0;
+    if (id && id <= lastId) return;
+    if (id) lastId = id;
+    const cls = /fail|reject/.test(v.kind) ? 'ev-bad'
+              : /retry|throttl/.test(v.kind) ? 'ev-warn'
+              : /running|queued/.test(v.kind) ? 'ev-run' : 'ev-ok';
+    pushEvent(v.kind, v.payload, cls);
+    // task.done 落在哪一段，取决于它跑的是哪种任务
+    if (v.kind === 'task.done') {
+      const seg = { script: 'S2', revise: 'S3', fx: 'S3', image: 'S4', compile: 'S5' }[v.payload?.kind];
+      if (seg) setStage(seg, 'done');
+    } else if (STAGE[v.kind]) {
+      setStage(...STAGE[v.kind]);
+    }
+  };
+
+  const catchUp = async () => {
+    try {
+      const r = await api(`/projects/${pid}/timeline?after=${lastId}`);
+      r.events.forEach(apply);
+    } catch {}
+  };
+
+  const connect = async () => {
+    await catchUp();                 // ← 先补拉
+    es = new EventSource(`${platform.apiBase}/projects/${pid}/events`);
+    es.onopen = () => { backoff = 500; };
+    es.onmessage = e => { try { apply(JSON.parse(e.data)); } catch {} };
     es.onerror = () => {
       es.close();
-      setTimeout(async () => {
-        // 补拉断线期间的事件，状态自动收敛
-        try {
-          const r = await api(`/projects/${pid}/timeline?after=${lastId}`);
-          r.events.forEach(v => pushEvent(v.kind, v.payload));
-          lastId = r.events.at(-1)?.id ?? lastId;
-        } catch {}
-        backoff = Math.min(backoff * 2, 10000);
-        connect();
-      }, backoff);
+      backoff = Math.min(backoff * 2, 10000);   // 指数退避
+      setTimeout(connect, backoff);             // 重连时再补拉一次
     };
   };
   connect();

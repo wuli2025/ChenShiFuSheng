@@ -193,26 +193,39 @@ async fn timeline(
     Json(serde_json::json!({ "events": st.store.events_after(&pid, q.after) }))
 }
 
+/// SSE 从**时间线本身**读，而不是只订阅 api 进程的内存总线。
+///
+/// 这是必须的：worker 是另一个进程，它 `append_event` 写库，广播不到 api 的 broadcast
+/// channel。若 SSE 只听内存总线，客户端就永远看不到 worker 写的 `task.running` /
+/// `task.done` —— 而那恰恰是用户最关心的事件。
+///
+/// 内存总线保留下来，只当作「有新事件了，别等满一个 tick」的唤醒信号（低延迟优化）；
+/// **真相永远来自库**。云端多实例时把 bus 换成 Redis pub/sub，这段逻辑一行不用改。
 async fn events_sse(
     State(st): State<AppState>,
     Path(pid): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let mut rx = st.bus.subscribe();
+    // 断线重连时浏览器自动带上 Last-Event-ID，从那之后接着推。
+    let mut last: u64 = headers
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+
+    let mut wake = st.bus.subscribe();
     let stream = async_stream::stream! {
         loop {
-            match rx.recv().await {
-                Ok(frame) => {
-                    // 只推本项目的事件
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&frame) {
-                        if v["project_id"] == pid.as_str() {
-                            let id = v["id"].as_u64().unwrap_or(0);
-                            yield Ok(Event::default().id(id.to_string()).data(frame));
-                        }
-                    }
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(_) => break,
+            for e in st.store.events_after(&pid, last) {
+                last = e.id;
+                let frame = serde_json::json!({
+                    "id": e.id, "project_id": e.project_id,
+                    "kind": e.kind, "payload": e.payload,
+                });
+                yield Ok(Event::default().id(e.id.to_string()).data(frame.to_string()));
             }
+            // 等唤醒信号；最多 500ms 后自己醒来查库 —— worker 写的事件靠这条路径送达。
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(500), wake.recv()).await;
         }
     };
     Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::default())

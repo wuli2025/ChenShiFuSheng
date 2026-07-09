@@ -67,29 +67,55 @@ export class CrystalHall {
     this._layout();
   }
 
-  /** 按热度分层：热门在内圈、大球，长尾在外圈、小球。 */
+  /**
+   * 黄金角螺旋（向日葵）布局：热门在内、长尾在外，相邻球间距天然均匀。
+   *
+   * 不用同心环 —— 环上塞固定数量的球时，内圈周长不够，球会咬在一起。
+   * 螺旋步长取 2.24×最大半径（含 12% 呼吸余量），再按包围盒自适应缩放，
+   * 于是任意球数、任意画布尺寸都铺得开且不溢出。
+   */
   _layout() {
     const { width: w, height: h } = this.canvas.getBoundingClientRect();
+    if (!w || !h || !this.items.length) {
+      this.orbs = [];
+      return;
+    }
+
+    const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // ≈ 2.39996 rad
+    const SQUASH = 0.78; // 纵向压扁，让它像一个「场」而不是一个圆
+
+    // 热度决定大小；按热度降序排，热门自然落在螺旋中心。
+    const sized = [...this.items]
+      .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+      .map((it, i) => ({ it, i, r: 30 + Math.min(24, Math.log2((it.plays || 0) + 2) * 4.2) }));
+
+    const maxR = Math.max(...sized.map(s => s.r));
+    const spacing = maxR * 2.24;
+
+    const raw = sized.map(({ it, i, r }) => {
+      const ang = i * GOLDEN;
+      const rad = spacing * Math.sqrt(i + 0.62);
+      return { it, i, r, x: Math.cos(ang) * rad, y: Math.sin(ang) * rad * SQUASH };
+    });
+
+    // 自适应缩放：把包围盒（含球半径与进度环）压进画布安全区。
+    const pad = 20;
+    const extX = raw.reduce((m, o) => Math.max(m, Math.abs(o.x) + o.r + pad), 1);
+    const extY = raw.reduce((m, o) => Math.max(m, Math.abs(o.y) + o.r + pad), 1);
+    const scale = Math.min(1, (w * 0.47) / extX, (h * 0.47) / extY);
+
     const cx = w / 2, cy = h / 2;
-    const n = this.items.length || 1;
-    this.orbs = this.items.map((it, i) => {
-      const ring = Math.floor(i / 6);
-      const inRing = i % 6;
-      const perRing = Math.min(6, n - ring * 6);
-      const ang = (inRing / perRing) * TAU + ring * 0.6;
-      const rad = 110 + ring * 118;
-      const heat = it.plays || 0;
-      const size = 44 + Math.min(26, Math.log2(heat + 2) * 5);
+    this.orbs = raw.map(o => {
+      const i = o.i;
       return {
-        item: it,
-        // 目标位置
-        x: cx + Math.cos(ang) * rad,
-        y: cy + Math.sin(ang) * rad * 0.72, // 略压扁，像一个场而不是圆
-        r: size,
+        item: o.it,
+        x: cx + o.x * scale,
+        y: cy + o.y * scale,
+        r: o.r * scale,
         // 每颗球独立的呼吸相位，避免整齐划一的塑料感
         phase: (i * 137.5) % TAU,
         speed: 0.6 + ((i * 31) % 7) / 14,
-        hue: it.hue ?? (i * 47) % 360,
+        hue: o.it.hue ?? (i * 47) % 360,
       };
     });
   }
