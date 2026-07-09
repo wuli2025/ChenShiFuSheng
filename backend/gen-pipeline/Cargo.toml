@@ -1,0 +1,15 @@
+[package]
+name = "gen-pipeline"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cli-core = { path = "../cli-core" }
+provider-dock = { path = "../provider-dock" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }

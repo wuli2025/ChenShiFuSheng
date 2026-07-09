@@ -1,0 +1,12 @@
+[package]
+name = "provider-dock"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cli-core = { path = "../cli-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

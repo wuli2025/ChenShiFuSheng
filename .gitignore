@@ -85,3 +85,11 @@ scripts/codex/gen.log
 _build_installer.log
 _dev*.log
 .env.prod
+
+# v11 refactor
+backend/target/
+_legacy/**/node_modules/
+
+node_modules/
+backend/target/
+dist/
