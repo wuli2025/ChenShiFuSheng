@@ -61,15 +61,37 @@
 - `frontend/build.mjs` —— 打包自包含单文件（内联 CSS+JS，产物含外链即失败）。
 - 端差：`platform.hasDoctor` / `platform.hasLocalFs` 是**全代码库唯一**感知端别的地方。
 
+### P5+ · vault-import ✅
+`cargo run -p gen-pipeline --example vault_import -- <vault> [--apply]`
+- 182 张真生图，FNV-1a 内容哈希去重（全平台单存），重复导入幂等。
+- `vault/works` 的 3 部成品挂为模板代表作试玩样例。
+
+### P7 部分 · 部署编排 ✅
+- `deploy/docker-compose.prod.yml`（api×2 / worker×N / nginx / PG / Redis）
+- `deploy/nginx/nginx.conf`：`/games` 静态直出 + SSE 不缓冲 + 读写分级限流
+- `Dockerfile.api`（**不含 CLI 与凭据**）/ `Dockerfile.worker`（含双 CLI + 内置 node 跑 compile.mjs）
+
+### 端到端验证（真实进程）✅
+| 验证项 | 结果 |
+|---|---|
+| 杀掉 api，worker 继续干活并写时间线，重启后补拉 | 4 条事件一条不丢 |
+| codex 缺席 + 无 fallback | 报红，**0 张 SVG** |
+| codex 缺席 + 有 fallback | 单张降级，`source: api_fallback`，2 张真 PNG |
+| 含真生图编译 | 24 张 base64 内联，2.2MB，0 运行时错误 |
+| 浏览器（1440×900） | 60.3fps，0 运行时错误，四档视口无横向溢出 |
+
+### 修掉的两个真 bug
+1. `Script::walk()` 的 **memo 污染**：环剪枝返回的 `0` 被缓存，污染所有经过该节点的路径 → 最短周目时长被算成荒谬小值。
+2. **悬空引用被静默当作 0 秒路径**，掩盖真实剧情量。现已提升为全局硬检查 `no_dangling_refs`。
+
 ## 待办
 
 ### P7 · 收尾
-- [ ] `deploy/docker-compose.prod.yml`：api×2 / worker×N / nginx 限流 / PG 备份卷
 - [ ] PgStore 实装（同 `Store` trait）+ Redis Stream 队列 + Redis pub/sub 多实例 SSE fan-out
 - [ ] 观测四看板：任务成功率 / CLI p95 / 队列深度 / 生图失败率+降级率
 - [ ] 配额三级（免费池 / BYOK / 并发 4）—— `Quota` 已实装，接入鉴权即可
-- [ ] `vault-import`：`vault/art` 内容哈希导入 `assets_lib`；`vault/works` 挂为模板代表作试玩
-- [ ] CI 门禁：clippy -D warnings、Playwright 全链冒烟、Lighthouse ≥90
+- [ ] 鉴权：JWT + Redis 会话（当前 owner 硬编码 `local`）
+- [ ] CI 门禁：clippy -D warnings、`npm run test`（Playwright 冒烟已写好）、Lighthouse ≥90
 
 ### P8 · 桌面端投放
 - [ ] Tauri 薄壳：sidecar 守护 `chenshi-api --embedded`（随机端口 + token 握手）、托盘、目录对话框、updater

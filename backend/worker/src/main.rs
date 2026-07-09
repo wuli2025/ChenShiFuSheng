@@ -5,6 +5,7 @@
 //!
 //! worker 完成后**直接写时间线**，不依赖任何前端在线（持久生产）。
 
+use exec::{Store, TaskQueue};
 use gen_pipeline::{checks, image, prompts, script::Script, TaskKind};
 use std::time::Duration;
 
@@ -77,10 +78,10 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-/// 桌面/单机模式下 worker 与 api 共享同一份 embedded 存储文件。
-/// 云端模式换成 Redis Stream + PG，同一 trait，业务逻辑不变。
-fn api_store(data: &std::path::Path) -> anyhow::Result<exec::SharedStore> {
-    exec::SharedStore::open(data)
+/// worker 与 api 共享同一份存储实现（`chenshi-store`）。
+/// 云端换 PgStore + Redis Stream，同 trait，业务逻辑不变。
+fn api_store(data: &std::path::Path) -> anyhow::Result<exec::EmbeddedStore> {
+    exec::EmbeddedStore::open(data)
 }
 
 /// 让编译器确认这些模块被用到（也是给读者的索引）。

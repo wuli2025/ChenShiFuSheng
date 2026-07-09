@@ -24,6 +24,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum",
+ "chenshi-store",
  "cli-core",
  "futures",
  "gen-pipeline",
@@ -187,6 +188,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "rand_core",
+]
+
+[[package]]
+name = "chenshi-store"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "gen-pipeline",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1647,6 +1658,7 @@ name = "worker"
 version = "0.11.0"
 dependencies = [
  "anyhow",
+ "chenshi-store",
  "cli-core",
  "gen-pipeline",
  "provider-dock",

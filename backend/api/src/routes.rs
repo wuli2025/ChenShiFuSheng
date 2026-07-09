@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::store::{now, Project, ProjectState, Store, Task};
+use crate::store::{now, Project, ProjectState, Publication, Task};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -22,6 +22,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/projects/:id/tasks", post(submit_task))
         .route("/v1/projects/:id/timeline", get(timeline))
         .route("/v1/projects/:id/events", get(events_sse))
+        .route("/v1/projects/:id/publish", post(publish))
         // dock 路由物理独立（隔离板块）
         .route("/v1/providers", get(providers))
         .with_state(state)
@@ -35,11 +36,17 @@ async fn health(State(st): State<AppState>) -> impl IntoResponse {
         .into_iter()
         .map(|(e, ok, detail)| serde_json::json!({"engine": e.as_str(), "ok": ok, "detail": detail}))
         .collect();
+    // 生图梯队二是否就绪。dock 是隔离板块 —— 这里只问「有没有」，不问「是哪家」。
+    let dock = st.dock.lock().await;
+    let image_fallback_ready = dock.has_image_fallback("local");
+    let link_mode = dock.link_mode_allowed();
     Json(serde_json::json!({
         "ok": true,
         "mode": if st.embedded { "embedded" } else { "server" },
         "data_dir": gen_pipeline::data_dir(),
         "cli": cli,
+        "image_fallback_ready": image_fallback_ready,
+        "link_mode_allowed": link_mode,
     }))
 }
 
@@ -47,7 +54,7 @@ async fn health(State(st): State<AppState>) -> impl IntoResponse {
 
 async fn hall_feed(State(st): State<AppState>) -> impl IntoResponse {
     let mut pubs = st.store.publications();
-    pubs.sort_by(|a, b| b.plays.cmp(&a.plays));
+    pubs.sort_by_key(|p| std::cmp::Reverse(p.plays));
     Json(serde_json::json!({ "items": pubs }))
 }
 
@@ -209,6 +216,62 @@ async fn events_sse(
         }
     };
     Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::default())
+}
+
+// ---------------------------------------------------------------- publish
+
+#[derive(Deserialize)]
+struct PublishReq {
+    /// 编译产出的单文件 HTML（相对 builds/ 的文件名）。
+    build: String,
+    cover_url: String,
+    endings: usize,
+    playtime_sec: u32,
+    /// 编译时跑的 contract.checks 是否全过。**任何一条不过，产物不进大厅。**
+    checks_passed: bool,
+}
+
+async fn publish(
+    State(st): State<AppState>,
+    Path(pid): Path<String>,
+    Json(req): Json<PublishReq>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let project = st
+        .store
+        .get_project(&pid)
+        .ok_or((StatusCode::NOT_FOUND, "项目不存在".into()))?;
+
+    if !req.checks_passed {
+        st.emit(&pid, "publish.rejected", serde_json::json!({"reason": "校验未通过"}));
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "校验未通过，产物不进大厅".into(),
+        ));
+    }
+    // 静态扫描兜底：产物不得引用外链。
+    let html = gen_pipeline::builds_dir().join(&req.build);
+    if let Ok(content) = std::fs::read_to_string(&html) {
+        if content.contains("src=\"http") || content.contains("href=\"http") {
+            st.emit(&pid, "publish.rejected", serde_json::json!({"reason": "产物含外链"}));
+            return Err((StatusCode::UNPROCESSABLE_ENTITY, "产物含外链请求".into()));
+        }
+    }
+
+    let game_id = uuid::Uuid::new_v4().to_string();
+    st.store.publish(Publication {
+        game_id: game_id.clone(),
+        project_id: pid.clone(),
+        title: project.title.clone(),
+        cover_url: req.cover_url,
+        // 产物仓静态直出，玩家读流量不打 API。
+        html_url: format!("/games/{}", req.build),
+        endings: req.endings,
+        playtime_sec: req.playtime_sec,
+        plays: 0,
+        featured: false,
+    });
+    st.emit(&pid, "published", serde_json::json!({"game_id": game_id}));
+    Ok(Json(serde_json::json!({ "game_id": game_id })))
 }
 
 // ---------------------------------------------------------------- dock

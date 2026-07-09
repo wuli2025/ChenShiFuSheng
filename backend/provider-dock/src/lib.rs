@@ -166,10 +166,10 @@ pub fn redact(line: &str) -> String {
         if let Some(pos) = out.find(k) {
             // 形如 KEY=value 或 "KEY": "value"
             let tail = &out[pos + k.len()..];
-            if let Some(eq) = tail.find(|c| c == '=' || c == ':') {
+            if let Some(eq) = tail.find(['=', ':']) {
                 let val_start = pos + k.len() + eq + 1;
                 let val_end = out[val_start..]
-                    .find(|c: char| c == ' ' || c == ',' || c == '\n' || c == '}')
+                    .find([' ', ',', '\n', '}'])
                     .map(|i| val_start + i)
                     .unwrap_or(out.len());
                 if val_end > val_start {

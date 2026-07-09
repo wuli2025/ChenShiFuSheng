@@ -1,131 +1,30 @@
 //! 五种任务的执行体。
 //!
 //! 生图任务是全项目最讲究的一段：双梯队 + 单张粒度降级 + 显式 source 标记。
+//!
+//! 存储直接复用 `chenshi-store`（与 api 同一份实现）—— 这是「一个后端两种投放」
+//! 的落地点：存储只有一份，业务逻辑零分叉。worker 额外用到 `TaskQueue`
+//! （领取/结算任务），api 不 import 它。
 
 use cli_core::{CliJob, CollectSink, Engine, EnvPatch, Sandbox};
 use gen_pipeline::checks::{self, ArtAudit};
 use gen_pipeline::image::{self, FallbackPolicy, ImageRequest, ImageSource, RealCodexShot, Shot};
 use gen_pipeline::script::Script;
 use gen_pipeline::{prompts, Contract, TaskKind};
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::path::PathBuf;
 
-// ---------------------------------------------------------------- 共享存储
-// worker 与 api 在单机模式下读写同一份 db.json。云端换 PG，接口不变。
+pub use chenshi_store::{EmbeddedStore, Store, Task, TaskQueue};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    pub id: String,
-    pub project_id: String,
-    pub kind: TaskKind,
-    pub state: String,
-    pub retry: u32,
-    pub payload: serde_json::Value,
-    pub error: Option<String>,
-    pub lease_worker: Option<String>,
-    pub lease_at: Option<i64>,
-}
-
-#[derive(Default, Serialize, Deserialize)]
-struct Db {
-    projects: serde_json::Value,
-    events: Vec<serde_json::Value>,
-    tasks: Vec<Task>,
-    publications: Vec<serde_json::Value>,
-    next_event_id: u64,
-}
-
-pub struct SharedStore {
-    path: PathBuf,
-    lock: RwLock<()>,
-}
-
-fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-impl SharedStore {
-    pub fn open(dir: &Path) -> anyhow::Result<Self> {
-        std::fs::create_dir_all(dir)?;
-        Ok(Self {
-            path: dir.join("db.json"),
-            lock: RwLock::new(()),
-        })
-    }
-
-    fn read(&self) -> Db {
-        std::fs::read_to_string(&self.path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    fn write(&self, db: &Db) {
-        let tmp = self.path.with_extension("json.tmp");
-        if let Ok(v) = serde_json::to_vec_pretty(db) {
-            if std::fs::write(&tmp, v).is_ok() {
-                let _ = std::fs::rename(&tmp, &self.path);
-            }
-        }
-    }
-
-    pub fn claim_task(&self, worker_id: &str) -> Option<Task> {
-        let _g = self.lock.write().unwrap();
-        let mut db = self.read();
-        let t = db.tasks.iter_mut().find(|t| t.state == "queued")?;
-        t.state = "running".into();
-        t.lease_worker = Some(worker_id.into());
-        t.lease_at = Some(now());
-        let out = t.clone();
-        self.write(&db);
-        Some(out)
-    }
-
-    pub fn finish_task(&self, id: &str, ok: bool, error: Option<String>) {
-        let _g = self.lock.write().unwrap();
-        let mut db = self.read();
-        if let Some(t) = db.tasks.iter_mut().find(|t| t.id == id) {
-            t.state = if ok { "done".into() } else { "failed".into() };
-            t.error = error;
-            t.lease_worker = None;
-            t.lease_at = None;
-        }
-        self.write(&db);
-    }
-
-    /// worker 完成直接写时间线 —— 不依赖前端在线。
-    pub fn append_event(&self, project_id: &str, kind: &str, payload: serde_json::Value) {
-        let _g = self.lock.write().unwrap();
-        let mut db = self.read();
-        db.next_event_id += 1;
-        db.events.push(serde_json::json!({
-            "id": db.next_event_id,
-            "project_id": project_id,
-            "kind": kind,
-            "payload": payload,
-            "created_at": now(),
-        }));
-        self.write(&db);
-    }
-
-    pub fn template_of(&self, project_id: &str) -> Option<Contract> {
-        let db = self.read();
-        let tid = db.projects.get(project_id)?.get("template_id")?.as_str()?;
-        gen_pipeline::template::builtin()
-            .into_iter()
-            .find(|t| t.id == tid)
-    }
+/// 从项目的 template_id 找回契约。
+fn template_of(store: &EmbeddedStore, project_id: &str) -> Option<Contract> {
+    let tid = store.get_project(project_id)?.template_id;
+    gen_pipeline::template::builtin().into_iter().find(|t| t.id == tid)
 }
 
 // ---------------------------------------------------------------- 任务分发
 
-pub async fn run_task(task: &Task, store: &SharedStore, dry: bool) -> anyhow::Result<serde_json::Value> {
-    let contract = store
-        .template_of(&task.project_id)
+pub async fn run_task(task: &Task, store: &EmbeddedStore, dry: bool) -> anyhow::Result<serde_json::Value> {
+    let contract = template_of(store, &task.project_id)
         .or_else(|| {
             task.payload
                 .get("template_id")
@@ -207,7 +106,7 @@ async fn write_fx(task: &Task, c: &Contract, dry: bool) -> anyhow::Result<serde_
 async fn batch_images(
     task: &Task,
     c: &Contract,
-    store: &SharedStore,
+    store: &EmbeddedStore,
     dry: bool,
 ) -> anyhow::Result<serde_json::Value> {
     let nodes: Vec<serde_json::Value> = task
@@ -366,7 +265,7 @@ fn base64_decode(s: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 /// S5 编译 + 跑 contract.checks。**任何一条不过，产物不进大厅。**
-async fn compile(task: &Task, c: &Contract, store: &SharedStore) -> anyhow::Result<serde_json::Value> {
+async fn compile(task: &Task, c: &Contract, store: &EmbeddedStore) -> anyhow::Result<serde_json::Value> {
     let dir = gen_pipeline::project_dir(&task.project_id);
     let raw = std::fs::read_to_string(dir.join("script.md"))
         .map_err(|e| anyhow::anyhow!("读不到 script.md: {e}"))?;

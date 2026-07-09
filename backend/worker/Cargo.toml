@@ -11,6 +11,7 @@ path = "src/main.rs"
 cli-core = { path = "../cli-core" }
 provider-dock = { path = "../provider-dock" }
 gen-pipeline = { path = "../gen-pipeline" }
+chenshi-store = { path = "../store" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

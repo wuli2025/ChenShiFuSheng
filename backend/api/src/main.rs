@@ -10,7 +10,7 @@
 
 mod routes;
 mod state;
-mod store;
+pub use chenshi_store as store;
 
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;

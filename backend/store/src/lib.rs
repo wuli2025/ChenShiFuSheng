@@ -67,6 +67,8 @@ pub struct Publication {
     pub featured: bool,
 }
 
+/// api 依赖的存储能力。**不含 claim/finish** —— 领取与结算任务是 worker 的职责，
+/// api 二进制不该携带这个能力。云端换 PgStore 时实现同一 trait。
 pub trait Store: Send + Sync {
     fn create_project(&self, p: Project) -> anyhow::Result<()>;
     fn get_project(&self, id: &str) -> Option<Project>;
@@ -78,16 +80,20 @@ pub trait Store: Send + Sync {
     fn events_after(&self, project_id: &str, after: u64) -> Vec<TimelineEvent>;
 
     fn enqueue(&self, t: Task) -> anyhow::Result<()>;
-    /// 原子领取一个 queued 任务并盖租约。
-    fn claim_task(&self, worker_id: &str) -> Option<Task>;
-    fn finish_task(&self, task_id: &str, ok: bool, error: Option<String>);
     fn running_counts(&self, project_id: &str, owner: &str) -> (usize, usize, usize);
-    /// 回收租约超时的孤儿任务（worker 崩溃）。返回回收数。
+    /// 回收租约超时的孤儿任务（worker 崩溃）。返回回收数。api 侧定时扫描。
     fn reap_orphans(&self, timeout_sec: i64) -> usize;
 
     fn templates(&self) -> Vec<Contract>;
     fn publications(&self) -> Vec<Publication>;
     fn publish(&self, p: Publication);
+}
+
+/// worker 侧的队列消费能力。api 不 import 它。
+pub trait TaskQueue: Send + Sync {
+    /// 原子领取一个 queued 任务并盖租约。
+    fn claim_task(&self, worker_id: &str) -> Option<Task>;
+    fn finish_task(&self, task_id: &str, ok: bool, error: Option<String>);
 }
 
 pub fn now() -> i64 {
@@ -106,9 +112,15 @@ struct Db {
     next_event_id: u64,
 }
 
+/// 单机存储。**api 与 worker 是两个进程，共读写同一个 `db.json`**，
+/// 所以每次操作都从磁盘重读 —— 不能持内存缓存，否则 worker 看不见 api 刚入队的任务。
+///
+/// `RwLock` 只保证进程内互斥；跨进程靠「读-改-原子写」窗口足够小。
+/// 云端换 PgStore 后不存在这个问题（事务由数据库保证）。
 pub struct EmbeddedStore {
     path: PathBuf,
-    db: RwLock<Db>,
+    /// 进程内互斥锁。锁的是「读盘→改→写盘」这个临界区，不是数据本身。
+    guard: RwLock<()>,
     templates: Vec<Contract>,
 }
 
@@ -117,16 +129,25 @@ impl EmbeddedStore {
         let dir: PathBuf = dir.into();
         std::fs::create_dir_all(&dir)?;
         let path = dir.join("db.json");
-        let db = if path.exists() {
-            serde_json::from_str(&std::fs::read_to_string(&path)?).unwrap_or_default()
-        } else {
-            Db::default()
-        };
         Ok(Self {
             path,
-            db: RwLock::new(db),
+            guard: RwLock::new(()),
             templates: gen_pipeline::template::builtin(),
         })
+    }
+
+    /// 读快照（加读锁 + 读盘）。
+    fn read_db(&self) -> Db {
+        let _g = self.guard.read().unwrap();
+        self.load()
+    }
+
+    /// 每次都从磁盘读 —— 跨进程可见性的代价，单机量级可以接受。
+    fn load(&self) -> Db {
+        std::fs::read_to_string(&self.path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
     }
 
     /// 原子写：tmp + rename。断电不留半个文件。
@@ -144,20 +165,20 @@ impl EmbeddedStore {
 
 impl Store for EmbeddedStore {
     fn create_project(&self, p: Project) -> anyhow::Result<()> {
-        let mut db = self.db.write().unwrap();
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
         db.projects.insert(p.id.clone(), p);
         self.flush(&db);
         Ok(())
     }
 
     fn get_project(&self, id: &str) -> Option<Project> {
-        self.db.read().unwrap().projects.get(id).cloned()
+        self.read_db()
+            .projects.get(id).cloned()
     }
 
     fn list_projects(&self, owner: &str) -> Vec<Project> {
-        self.db
-            .read()
-            .unwrap()
+        self.read_db()
             .projects
             .values()
             .filter(|p| p.owner_id == owner)
@@ -166,7 +187,8 @@ impl Store for EmbeddedStore {
     }
 
     fn append_event(&self, project_id: &str, kind: &str, payload: serde_json::Value) -> u64 {
-        let mut db = self.db.write().unwrap();
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
         db.next_event_id += 1;
         let id = db.next_event_id;
         db.events.push(TimelineEvent {
@@ -181,9 +203,7 @@ impl Store for EmbeddedStore {
     }
 
     fn events_after(&self, project_id: &str, after: u64) -> Vec<TimelineEvent> {
-        self.db
-            .read()
-            .unwrap()
+        self.read_db()
             .events
             .iter()
             .filter(|e| e.project_id == project_id && e.id > after)
@@ -192,36 +212,15 @@ impl Store for EmbeddedStore {
     }
 
     fn enqueue(&self, t: Task) -> anyhow::Result<()> {
-        let mut db = self.db.write().unwrap();
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
         db.tasks.push(t);
         self.flush(&db);
         Ok(())
     }
 
-    fn claim_task(&self, worker_id: &str) -> Option<Task> {
-        let mut db = self.db.write().unwrap();
-        let t = db.tasks.iter_mut().find(|t| t.state == "queued")?;
-        t.state = "running".into();
-        t.lease_worker = Some(worker_id.into());
-        t.lease_at = Some(now());
-        let out = t.clone();
-        self.flush(&db);
-        Some(out)
-    }
-
-    fn finish_task(&self, task_id: &str, ok: bool, error: Option<String>) {
-        let mut db = self.db.write().unwrap();
-        if let Some(t) = db.tasks.iter_mut().find(|t| t.id == task_id) {
-            t.state = if ok { "done".into() } else { "failed".into() };
-            t.error = error;
-            t.lease_worker = None;
-            t.lease_at = None;
-        }
-        self.flush(&db);
-    }
-
     fn running_counts(&self, project_id: &str, owner: &str) -> (usize, usize, usize) {
-        let db = self.db.read().unwrap();
+        let db = self.read_db();
         let owned: Vec<&str> = db
             .projects
             .values()
@@ -236,7 +235,8 @@ impl Store for EmbeddedStore {
     }
 
     fn reap_orphans(&self, timeout_sec: i64) -> usize {
-        let mut db = self.db.write().unwrap();
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
         let cutoff = now() - timeout_sec;
         let mut n = 0;
         for t in db.tasks.iter_mut() {
@@ -260,13 +260,41 @@ impl Store for EmbeddedStore {
     }
 
     fn publications(&self) -> Vec<Publication> {
-        self.db.read().unwrap().publications.clone()
+        self.read_db()
+            .publications.clone()
     }
 
     fn publish(&self, p: Publication) {
-        let mut db = self.db.write().unwrap();
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
         db.publications.retain(|x| x.game_id != p.game_id);
         db.publications.push(p);
+        self.flush(&db);
+    }
+}
+
+impl TaskQueue for EmbeddedStore {
+    fn claim_task(&self, worker_id: &str) -> Option<Task> {
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
+        let t = db.tasks.iter_mut().find(|t| t.state == "queued")?;
+        t.state = "running".into();
+        t.lease_worker = Some(worker_id.into());
+        t.lease_at = Some(now());
+        let out = t.clone();
+        self.flush(&db);
+        Some(out)
+    }
+
+    fn finish_task(&self, task_id: &str, ok: bool, error: Option<String>) {
+        let _g = self.guard.write().unwrap();
+        let mut db = self.load();
+        if let Some(t) = db.tasks.iter_mut().find(|t| t.id == task_id) {
+            t.state = if ok { "done".into() } else { "failed".into() };
+            t.error = error;
+            t.lease_worker = None;
+            t.lease_at = None;
+        }
         self.flush(&db);
     }
 }
@@ -274,6 +302,7 @@ impl Store for EmbeddedStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // claim/finish 在 TaskQueue trait 上
 
     fn tmp() -> PathBuf {
         let d = std::env::temp_dir().join(format!(
@@ -362,6 +391,26 @@ mod tests {
         s.claim_task("w2");
         let (h, l, u) = s.running_counts("p1", "u1");
         assert_eq!((h, l, u), (1, 1, 2));
+    }
+
+    /// 回归：api 与 worker 是**两个进程**，各持一个 EmbeddedStore。
+    /// 曾经 EmbeddedStore 持内存缓存，导致 worker 永远看不见 api 刚入队的任务。
+    #[test]
+    fn two_processes_see_each_others_writes() {
+        let dir = tmp();
+        let api = EmbeddedStore::open(&dir).unwrap();     // 进程 A
+        let worker = EmbeddedStore::open(&dir).unwrap();  // 进程 B
+
+        api.enqueue(task("t1", "p1", TaskKind::Script)).unwrap();
+        let claimed = worker.claim_task("w1");
+        assert!(claimed.is_some(), "worker 必须看得见 api 入队的任务");
+
+        // 反向：worker 写的时间线，api 立刻读得到
+        worker.append_event("p1", "task.done", serde_json::json!({}));
+        assert_eq!(api.events_after("p1", 0).len(), 1, "api 必须看得见 worker 写的事件");
+
+        // 且 api 看到任务已被领走
+        assert!(api.claim_task("w2").is_none());
     }
 
     #[test]

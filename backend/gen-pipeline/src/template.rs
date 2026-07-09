@@ -122,9 +122,9 @@ impl Contract {
             .replace(
                 "{{soft_cap}}",
                 if self.numeric.soft_cap {
-                    &"启用软上限，属性接近上限时收益递减，禁止爆表"
+                    "启用软上限，属性接近上限时收益递减，禁止爆表"
                 } else {
-                    &"不设软上限"
+                    "不设软上限"
                 },
             )
             .replace("{{gate_style}}", &self.gates.style)
