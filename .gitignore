@@ -97,3 +97,6 @@ dist/
 node_modules
 dist/
 .env
+
+# v11 重构遗留归档(60GB 构建产物,不入库)
+/_legacy/
